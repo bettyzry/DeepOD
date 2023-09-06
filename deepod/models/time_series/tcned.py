@@ -78,7 +78,7 @@ class TcnED(BaseDeepAD):
             if self.sample_selection == 0:
                 for epoch in range(self.epochs):
                     self.training(optimizer, train_loader, epoch)
-            elif self.sample_selection == 1:        # 保留Δloss小的80%
+            elif self.sample_selection == 1:                            # 保留Δloss小的80%
                 train_loss_past = np.array([0 for i in range(len(self.train_data))])
                 for epoch in range(self.epochs):
                     self.training(optimizer, train_loader, epoch)
