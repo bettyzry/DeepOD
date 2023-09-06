@@ -139,6 +139,10 @@ class BaseDeepAD(metaclass=ABCMeta):
 
         self.random_state = random_state
         self.set_seed(random_state)
+
+        self.loss_by_epoch = []
+        self.adj_slide_window = 0
+        self.save_rate = 0.8
         return
 
     def fit(self, X, y=None):
