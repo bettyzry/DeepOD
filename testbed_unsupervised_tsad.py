@@ -25,13 +25,13 @@ parser.add_argument("--output_dir", type=str, default='@records/',
 parser.add_argument("--loss_dir", type=str, default='@losses/',
                     help="the output file path")
 parser.add_argument("--dataset", type=str,
-                    default='SMAP',
+                    default='ASD',
                     help='ASD,SMAP,MSL'
                     )
 parser.add_argument("--entities", type=str,
                     default='FULL',
                     help='FULL represents all the csv file in the folder, '
-                         'or a list of entity names split by comma'
+                         'or a list of entity names split by comma [D-14]'
                     )
 parser.add_argument("--entity_combined", type=int, default=1)
 parser.add_argument("--model", type=str, default='TcnED', help="TimesNet")

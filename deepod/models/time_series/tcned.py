@@ -3,9 +3,11 @@ TCN is adapted from https://github.com/locuslab/TCN
 """
 import numpy as np
 import torch
+import time
 from torch.utils.data import DataLoader
 from deepod.core.base_model import BaseDeepAD
 from deepod.core.networks.ts_network_tcn import TcnAE
+from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label
 
 
 class TcnED(BaseDeepAD):
@@ -28,6 +30,96 @@ class TcnED(BaseDeepAD):
         self.bias = bias
 
         return
+
+    def fit(self, X, y=None):
+        """
+        Fit detector. y is ignored in unsupervised methods.
+
+        Parameters
+        ----------
+        X : numpy array of shape (n_samples, n_features)
+            The input samples.
+
+        y : numpy array of shape (n_samples, )
+            Not used in unsupervised methods, present for API consistency by convention.
+            used in (semi-/weakly-) supervised methods
+
+        Returns
+        -------
+        self : object
+            Fitted estimator.
+        """
+        if self.data_type == 'ts':
+            X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+            y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
+            self.train_data = X_seqs
+            self.train_label = y_seqs
+            self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
+        else:
+            self.train_data = X
+            self.train_label = y
+            self.n_samples, self.n_features = X.shape
+
+        if self.verbose >= 1:
+            print('Start Training...')
+
+        if self.n_ensemble == 'auto':
+            self.n_ensemble = int(np.floor(100 / (np.log(self.n_samples) + self.n_features)) + 1)
+        if self.verbose >= 1:
+            print(f'ensemble size: {self.n_ensemble}')
+
+        for _ in range(self.n_ensemble):
+            train_loader, self.net, self.criterion = self.training_prepare(self.train_data,
+                                                                            y=self.train_label)
+            optimizer = torch.optim.Adam(self.net.parameters(),
+                                         lr=self.lr,
+                                         weight_decay=1e-5)
+            self.net.train()
+            for epoch in range(self.epochs):
+                self.training(optimizer, train_loader, epoch)
+
+        if self.verbose >= 1:
+            print('Start Inference on the training data...')
+
+        self.decision_scores_ = self.decision_function(X)
+        self.labels_ = self._process_decision_scores()
+
+        return self
+
+    def training(self, optimizer, dataloader, epoch):
+        t1 = time.time()
+        total_loss = 0
+        cnt = 0
+        for batch_x in dataloader:
+            loss = self.training_forward(batch_x, self.net, self.criterion)
+            self.net.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+            cnt += 1
+
+            # terminate this epoch when reaching assigned maximum steps per epoch
+            if cnt > self.epoch_steps != -1:
+                break
+
+        t = time.time() - t1
+        print(f'epoch{epoch + 1:3d}, '
+              f'training loss: {total_loss / cnt:.6f}, '
+              f'time: {t:.1f}s')
+
+        train_error_now = []
+        for batch_x in dataloader:
+            _, error = self.inference_forward(batch_x, self.net, self.criterion)
+            train_error_now = np.concatenate([train_error_now, error.cpu().detach().numpy()])
+        self.loss_by_epoch.append(train_error_now)
+
+        if epoch == 0:
+            self.epoch_time = t
+
+        self.epoch_update()
+
+        return total_loss
 
     def training_prepare(self, X, y):
         train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True)
