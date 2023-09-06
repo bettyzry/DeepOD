@@ -25,7 +25,7 @@ parser.add_argument("--output_dir", type=str, default='@records/',
 parser.add_argument("--loss_dir", type=str, default='@losses/',
                     help="the output file path")
 parser.add_argument("--dataset", type=str,
-                    default='ASD',
+                    default='MSL',
                     help='ASD,SMAP,MSL'
                     )
 parser.add_argument("--entities", type=str,
@@ -43,7 +43,7 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=10)
 
-parser.add_argument('--do_slide', type=int, default=0)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=1)      # 0：不划窗，1：min划窗
 
 args = parser.parse_args()
 
@@ -82,7 +82,7 @@ if not args.silent_header:
           f'{args.runs}runs, {cur_time}', file=f)
     for k in model_configs.keys():
         print(f'Parameters,\t [{k}], \t\t  {model_configs[k]}', file=f)
-    print(f'Parameters,\t [funcs], \t\t  {funcs[args.do_slide]}', file=f)
+    print(f'Parameters,\t [funcs], \t\t  {funcs[args.sample_selection]}', file=f)
     print(f'Note: {args.note}', file=f)
     print(f'---------------------------------------------------------', file=f)
     print(f'data, adj_auroc, std, adj_ap, std, adj_f1, std, adj_p, std, adj_r, std, time, model', file=f)
@@ -110,6 +110,7 @@ for dataset in dataset_name_lst:
 
             t1 = time.time()
             clf = model_class(**model_configs, random_state=42+i)
+            clf.sample_selection = args.sample_selection
             clf.fit(train_data)
             scores = clf.decision_function(test_data)
             t = time.time() - t1
@@ -130,7 +131,7 @@ for dataset in dataset_name_lst:
 
             os.path.join(args.output_dir, f'{args.model}.{args.flag}.csv')
             loss_df = pd.DataFrame(clf.loss_by_epoch)
-            loss_df.to_csv(loss_dir + dataset_name + '_' + funcs[args.do_slide] + str(i)+'.csv', index=False)
+            loss_df.to_csv(loss_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
 
         avg_entry = np.average(np.array(entries), axis=0)
         std_entry = np.std(np.array(entries), axis=0)
@@ -145,7 +146,7 @@ for dataset in dataset_name_lst:
                avg_entry[0], std_entry[0], avg_entry[1], std_entry[1],
                avg_entry[2], std_entry[2], avg_entry[3], std_entry[3],
                avg_entry[4], std_entry[4],
-               np.average(t_lst), args.model)
+               np.average(t_lst), args.model+'-'+str(args.sample_selection))
         print(txt)
         print(txt, file=f)
         f.close()

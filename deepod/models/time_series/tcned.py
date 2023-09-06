@@ -75,8 +75,22 @@ class TcnED(BaseDeepAD):
                                          lr=self.lr,
                                          weight_decay=1e-5)
             self.net.train()
-            for epoch in range(self.epochs):
-                self.training(optimizer, train_loader, epoch)
+            if self.sample_selection == 0:
+                for epoch in range(self.epochs):
+                    self.training(optimizer, train_loader, epoch)
+            elif self.sample_selection == 1:        # 保留Δloss小的80%
+                train_loss_past = np.array([0 for i in range(len(self.train_data))])
+                for epoch in range(self.epochs):
+                    self.training(optimizer, train_loader, epoch)
+
+                    save_num = int(self.save_rate * len(self.train_data))
+                    train_loss_now = self.loss_by_epoch[epoch]
+                    delta = train_loss_now - train_loss_past
+                    index = delta.argsort()[:save_num]                  # 保留delta最小的80%
+                    self.train_data = self.train_data[np.sort(index)]
+                    train_loss_past = train_loss_now[np.sort(index)]
+                    train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
+                                              shuffle=True, pin_memory=True)
 
         if self.verbose >= 1:
             print('Start Inference on the training data...')

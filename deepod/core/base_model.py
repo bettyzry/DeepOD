@@ -94,7 +94,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                  n_ensemble=1, seq_len=100, stride=1,
                  epoch_steps=-1, prt_steps=10,
                  device='cuda', contamination=0.1,
-                 verbose=1, random_state=42):
+                 verbose=1, random_state=42, sample_selection=0):
         self.model_name = model_name
 
         self.data_type = data_type
@@ -141,7 +141,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.set_seed(random_state)
 
         self.loss_by_epoch = []
-        self.adj_slide_window = 0
+        self.sample_selection = sample_selection
         self.save_rate = 0.8
         return
 
