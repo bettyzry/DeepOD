@@ -14,5 +14,5 @@ from .devnet import DevNetTS
 from .prenet import PReNetTS
 
 
-__all__ = ['DeepIsolationForestTS', 'DeepSVDDTS', 'TranAD', 'USAD', 'COUTA',
+__all__ = ['DeepIsolationForestTS', 'DeepSVDDTS', 'TranAD', 'USAD', 'COUTA', 'TcnED',
            'DeepSADTS', 'DevNetTS', 'PReNetTS', 'AnomalyTransformer', 'TimesNet']
