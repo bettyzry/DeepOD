@@ -106,6 +106,9 @@ for dataset in dataset_name_lst:
             scores = clf.decision_function(test_data)
             t = time.time() - t1
 
+
+
+
             eval_metrics = ts_metrics(labels, scores)
             adj_eval_metrics = ts_metrics(labels, point_adjustment(labels, scores))
 
