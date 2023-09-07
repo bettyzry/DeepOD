@@ -81,17 +81,8 @@ class TcnED(BaseDeepAD):
             elif self.sample_selection == 1:                            # 保留Δloss小的80%
                 train_loss_past = np.array([0 for i in range(len(self.train_data))])
                 for epoch in range(self.epochs):
-                    self.training(optimizer, train_loader, epoch)
-
-                    # sample selection
-                    save_num = int(self.save_rate * len(self.train_data))
-                    train_loss_now = self.loss_by_epoch[epoch]
-                    delta = train_loss_now - train_loss_past
-                    index = delta.argsort()[:save_num]                  # 保留delta最小的80%
-                    self.train_data = self.train_data[np.sort(index)]
-                    train_loss_past = train_loss_now[np.sort(index)]
-                    train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
-                                              shuffle=True, pin_memory=True)
+                    train_loss_now = self.training(optimizer, train_loader, epoch)
+                    train_loader, train_loss_past = self.do_sample_selection(train_loss_now, train_loss_past)
 
         if self.verbose >= 1:
             print('Start Inference on the training data...')
@@ -123,18 +114,18 @@ class TcnED(BaseDeepAD):
               f'training loss: {total_loss / cnt:.6f}, '
               f'time: {t:.1f}s')
 
-        train_error_now = []
+        train_loss_now = []
         for batch_x in dataloader:
             _, error = self.inference_forward(batch_x, self.net, self.criterion)
-            train_error_now = np.concatenate([train_error_now, error.cpu().detach().numpy()])
-        self.loss_by_epoch.append(train_error_now)
+            train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
+        self.loss_by_epoch.append(train_loss_now)
 
         if epoch == 0:
             self.epoch_time = t
 
         self.epoch_update()
 
-        return total_loss
+        return train_loss_now
 
     def training_prepare(self, X, y):
         train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True)
