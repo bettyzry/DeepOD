@@ -83,6 +83,7 @@ class TcnED(BaseDeepAD):
                 for epoch in range(self.epochs):
                     self.training(optimizer, train_loader, epoch)
 
+                    # sample selection
                     save_num = int(self.save_rate * len(self.train_data))
                     train_loss_now = self.loss_by_epoch[epoch]
                     delta = train_loss_now - train_loss_past
@@ -95,8 +96,8 @@ class TcnED(BaseDeepAD):
         if self.verbose >= 1:
             print('Start Inference on the training data...')
 
-        self.decision_scores_ = self.decision_function(X)
-        self.labels_ = self._process_decision_scores()
+        # self.decision_scores_ = self.decision_function(X)
+        # self.labels_ = self._process_decision_scores()
 
         return self
 
@@ -170,6 +171,6 @@ class TcnED(BaseDeepAD):
     def inference_forward(self, batch_x, net, criterion):
         batch_x = batch_x.float().to(self.device)
         output, _ = net(batch_x)
-        error = torch.nn.L1Loss(reduction='none')(output[:, -1], batch_x[:, -1])
+        error = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
         error = torch.sum(error, dim=1)
         return output, error

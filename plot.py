@@ -34,5 +34,5 @@ def main():
 
 
 if __name__ == '__main__':
-    data_root = '/home/xuhz/zry/tsad-master/&results/loss/[done] loss-record@TcnED_100_0_0_MSL-norm/@loss_results0.csv'
+    data_root = '/home/xuhz/zry/DeepOD-new/@losses/TcnED./SWaT_cut_norm0.csv'
     main()

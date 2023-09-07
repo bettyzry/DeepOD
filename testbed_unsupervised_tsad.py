@@ -26,10 +26,10 @@ parser.add_argument("--loss_dir", type=str, default='@losses/',
                     help="the output file path")
 parser.add_argument("--dataset", type=str,
                     default='MSL',
-                    help='ASD,SMAP,MSL,SWaT-cut'
+                    help='ASD,SMAP,MSL,SWaT_cut'
                     )
 parser.add_argument("--entities", type=str,
-                    default=['D-14'],
+                    default='D-14',
                     help='FULL represents all the csv file in the folder, '
                          'or a list of entity names split by comma '    # ['D-14', 'D-15']
                     )
@@ -41,7 +41,7 @@ parser.add_argument("--flag", type=str, default='')
 parser.add_argument("--note", type=str, default='')
 
 parser.add_argument('--seq_len', type=int, default=30)
-parser.add_argument('--stride', type=int, default=10)
+parser.add_argument('--stride', type=int, default=1)
 
 parser.add_argument('--sample_selection', type=int, default=1)      # 0：不划窗，1：min划窗
 
