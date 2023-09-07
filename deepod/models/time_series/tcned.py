@@ -69,20 +69,16 @@ class TcnED(BaseDeepAD):
             print(f'ensemble size: {self.n_ensemble}')
 
         for _ in range(self.n_ensemble):
-            train_loader, self.net, self.criterion = self.training_prepare(self.train_data,
+            self.train_loader, self.net, self.criterion = self.training_prepare(self.train_data,
                                                                             y=self.train_label)
             optimizer = torch.optim.Adam(self.net.parameters(),
                                          lr=self.lr,
                                          weight_decay=1e-5)
             self.net.train()
-            if self.sample_selection == 0:
-                for epoch in range(self.epochs):
-                    self.training(optimizer, train_loader, epoch)
-            elif self.sample_selection == 1:                            # 保留Δloss小的80%
-                train_loss_past = np.array([0 for i in range(len(self.train_data))])
-                for epoch in range(self.epochs):
-                    train_loss_now = self.training(optimizer, train_loader, epoch)
-                    train_loader, train_loss_past = self.do_sample_selection(train_loss_now, train_loss_past)
+            train_loss_past = np.array([0 for i in range(len(self.train_data))])
+            for epoch in range(self.epochs):
+                train_loss_now = self.training(optimizer, epoch)
+                train_loss_past = self.do_sample_selection(train_loss_now, train_loss_past)
 
         if self.verbose >= 1:
             print('Start Inference on the training data...')
@@ -92,11 +88,11 @@ class TcnED(BaseDeepAD):
 
         return self
 
-    def training(self, optimizer, dataloader, epoch):
+    def training(self, optimizer, epoch):
         t1 = time.time()
         total_loss = 0
         cnt = 0
-        for batch_x in dataloader:
+        for batch_x in self.train_loader:
             loss = self.training_forward(batch_x, self.net, self.criterion)
             self.net.zero_grad()
             loss.backward()
@@ -115,7 +111,7 @@ class TcnED(BaseDeepAD):
               f'time: {t:.1f}s')
 
         train_loss_now = []
-        for batch_x in dataloader:
+        for batch_x in self.train_loader:
             _, error = self.inference_forward(batch_x, self.net, self.criterion)
             train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
         self.loss_by_epoch.append(train_loss_now)

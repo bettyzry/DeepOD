@@ -424,12 +424,15 @@ class BaseDeepAD(metaclass=ABCMeta):
         # torch.backends.cudnn.deterministic = True
 
     def do_sample_selection(self, train_loss_now, train_loss_past):
-        # sample selection
-        save_num = int(self.save_rate * len(self.train_data))
-        delta = train_loss_now - train_loss_past
-        index = delta.argsort()[:save_num]  # 保留delta最小的80%
-        self.train_data = self.train_data[np.sort(index)]
-        train_loss_past = train_loss_now[np.sort(index)]
-        train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
-                                  shuffle=True, pin_memory=True)
-        return train_loader, train_loss_past
+        if self.sample_selection == 0:          # 无操作
+            pass
+        elif self.sample_selection == 1:        # 保留delta最小的80%
+            save_num = int(self.save_rate * len(self.train_data))
+            delta = train_loss_now - train_loss_past
+            index = delta.argsort()[:save_num]
+            self.train_data = self.train_data[np.sort(index)]
+            train_loss_past = train_loss_now[np.sort(index)]
+            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
+                                      shuffle=True, pin_memory=True)
+
+        return train_loss_past
