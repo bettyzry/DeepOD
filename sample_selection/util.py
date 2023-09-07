@@ -80,14 +80,14 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def write_results(pr_auc_history, roc_auc_history, dataset, subset, path):
+def write_results(pr_auc_history, roc_auc_history, dataset, path):
     pr_auc_history = np.array(pr_auc_history)
     roc_auc_history = np.array(roc_auc_history)
     pr_mean = np.mean(pr_auc_history)
     auc_mean = np.mean(roc_auc_history)
     pr_std = np.std(pr_auc_history)
     auc_std = np.std(roc_auc_history)
-    line = f'{dataset},{subset},{pr_mean},{pr_std},{auc_mean},{auc_std}\n'
+    line = f'{dataset},{pr_mean},{pr_std},{auc_mean},{auc_std}\n'
 
     with open(path, 'a') as f:
         f.write(line)

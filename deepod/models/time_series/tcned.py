@@ -110,7 +110,7 @@ class TcnED(BaseDeepAD):
               f'training loss: {total_loss / cnt:.6f}, '
               f'time: {t:.1f}s')
 
-        train_loss_now = []
+        train_loss_now = np.array([])
         for batch_x in self.train_loader:
             _, error = self.inference_forward(batch_x, self.net, self.criterion)
             train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
@@ -159,5 +159,5 @@ class TcnED(BaseDeepAD):
         batch_x = batch_x.float().to(self.device)
         output, _ = net(batch_x)
         error = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
-        error = torch.sum(error, dim=1)
+        error = error.mean(axis=1)
         return output, error

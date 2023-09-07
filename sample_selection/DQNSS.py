@@ -11,6 +11,8 @@ from ENV import ADEnv
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from DQN import DQN
+from RelayMemory import ReplayMemory
 
 torch.manual_seed(42)
 random.seed(42)

@@ -53,13 +53,13 @@ class ADEnv(gym.Env):
 
     def generater_a(self, *args, **kwargs):  # 随机选择一个异常数据
         # sampling function for D_a
-        index = np.random.choice(self.index_a)
+        index = np.random.choice(self.index_u)
 
         return index
 
     def generater_n(self, *args, **kwargs):  # 随机选择一个正常数据
         # sampling function for D_n
-        index = np.random.choice(self.index_n)
+        index = np.random.choice(self.index_u)
 
         return index
 
