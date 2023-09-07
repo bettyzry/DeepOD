@@ -15,6 +15,7 @@ from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label
 from deepod.core.networks.base_networks import sequential_net_name
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from scipy import stats
 
 
 class BaseDeepAD(metaclass=ABCMeta):
@@ -434,5 +435,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             train_loss_past = train_loss_now[np.sort(index)]
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
                                       shuffle=True, pin_memory=True)
+        elif self.sample_selection == 2:        # 按概率密度
+            res_freq = stats.relfreq(train_loss_now, numbins=50)  # numbins 是统计一次的间隔(步长)是多大
 
         return train_loss_past

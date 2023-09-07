@@ -62,3 +62,10 @@ RoSAS:
   alpha: 0.5
   margin: 1
   beta: 1
+
+TcnED:
+  epochs: 100
+  batch_size: 128
+  lr: 0.00015
+  dropout: 0.42
+  kernel_size: 5

@@ -15,10 +15,10 @@ def main():
     # watch = df[['0', '1', '2', '3', '4', '50', '99']]
     df = df.fillna(0)
     zdf = df.values
-    for i in range(10):
-        loss = df.values[i]
-        loss = zscore(loss)
-        zdf[i] = loss
+    # for i in range(10):
+    #     loss = df.values[i]
+    #     loss = zscore(loss)
+    #     zdf[i] = loss
     # index = [0, 1, 2, 3, 4]
     # watch = zdf[index, 0]
     # print(watch)
@@ -34,5 +34,5 @@ def main():
 
 
 if __name__ == '__main__':
-    data_root = '/home/xuhz/zry/DeepOD-new/@losses/TcnED./SWaT_cut_norm0.csv'
+    data_root = '/home/xuhz/zry/DeepOD-new/@losses/TcnED./SWaT_cut_min0.csv'
     main()
