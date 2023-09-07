@@ -65,7 +65,9 @@ RoSAS:
 
 TcnED:
   epochs: 100
-  batch_size: 128
+  batch_size: 512
   lr: 0.00015
   dropout: 0.42
-  kernel_size: 5
+  kernel_size: 2
+  rep_dim: 8
+  hidden_dims: '8,8'

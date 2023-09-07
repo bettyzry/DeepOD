@@ -40,7 +40,7 @@ parser.add_argument('--silent_header', action='store_true')
 parser.add_argument("--flag", type=str, default='')
 parser.add_argument("--note", type=str, default='')
 
-parser.add_argument('--seq_len', type=int, default=100)
+parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
 parser.add_argument('--sample_selection', type=int, default=1)      # 0：不划窗，1：min划窗

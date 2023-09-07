@@ -73,15 +73,15 @@ class TcnED(BaseDeepAD):
                                                                             y=self.train_label)
             optimizer = torch.optim.Adam(self.net.parameters(),
                                          lr=self.lr,
-                                         weight_decay=1e-5)
+                                         eps=1e-6)
             self.net.train()
             train_loss_past = np.array([0 for i in range(len(self.train_data))])
             for epoch in range(self.epochs):
                 train_loss_now = self.training(optimizer, epoch)
                 train_loss_past = self.do_sample_selection(train_loss_now, train_loss_past)
 
-        if self.verbose >= 1:
-            print('Start Inference on the training data...')
+        # if self.verbose >= 1:
+        #     print('Start Inference on the training data...')
 
         # self.decision_scores_ = self.decision_function(X)
         # self.labels_ = self._process_decision_scores()
