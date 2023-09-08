@@ -428,9 +428,10 @@ class BaseDeepAD(metaclass=ABCMeta):
         if self.sample_selection == 0:          # 无操作
             pass
         elif self.sample_selection == 1:        # 保留delta最小的80%
-            # if len(self.train_data) < int(self.n_samples*0.3):
-            #     return train_loss_past
+            if len(self.train_data) < int(self.n_samples*0.3):
+                return train_loss_past
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
+            # save_num = int(self.save_rate * len(self.train_data))
             delta = train_loss_now - train_loss_past
             index = delta.argsort()[:save_num]
             self.train_data = self.train_data[np.sort(index)]

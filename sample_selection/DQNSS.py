@@ -27,7 +27,7 @@ class DQNSS():
     DPLAN agent that encapsulates the training and testing of the DQN
     """
 
-    def __init__(self, env: ADEnv, test_set, destination_path, device='cpu', double_dqn=True):
+    def __init__(self, env: ADEnv, test_X, test_Y,destination_path, device='cpu', double_dqn=True):
         """
         Initialize the DPLAN agent
         :param env: the environment
@@ -37,7 +37,8 @@ class DQNSS():
         :param device: the device to use for training
         """
         self.double_dqn = double_dqn
-        self.test_set = test_set
+        self.test_X = test_X
+        self.test_Y = test_Y
         self.device = device
         self.env = env
 
@@ -60,7 +61,7 @@ class DQNSS():
         self.momentum = hyper['momentum']
         self.min_squared_gradient = hyper['min_squared_gradient']
         self.num_episodes = hyper['n_episodes']
-        self.num_warmup_steps = hyper['warmup_steps'] // hyper['steps_per_episode']
+        self.num_warmup_steps = hyper['warmup_steps']
         self.steps_per_episode = hyper['steps_per_episode']
         self.max_memory_size = hyper['max_memory']
         self.target_update = hyper['target_update']
@@ -150,7 +151,7 @@ class DQNSS():
         # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
         # detailed explanation). This converts batch-array of Transitions
         # to Transition of batch-arrays.
-        batch = Transition(*zip(*transitions))
+        batch = Transition(*zip(*transitions))  # 对应index的数据放到了一起，action，next_state等在一起
 
         # Compute a mask of non-final states and concatenate the batch elements
         # (a final state would've been the one after which simulation ended)
@@ -165,7 +166,7 @@ class DQNSS():
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
-        # 把现在的状态输入进去，得到预测的所有Q，并获得对应action的Q，即Q(st, at)
+        # 把一个batch的当前状态输入进去，得到预测的所有Q，并获得对应action的Q，即Q(st, at)
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)                  # 实际的Q
 
         # Compute V(s_{t+1}) for all next states.
@@ -196,20 +197,19 @@ class DQNSS():
         Implement the warmup steps to fill the replay memory using random actions
         """
         for _ in range(self.num_warmup_steps):
-            state = self.env.reset()                                    # 随机在未知数据中挑选一个点
-            obs_index = state
-            state = torch.tensor(self.env.x[state, :], dtype=torch.float32, device=self.device).unsqueeze(0)
+            state_index = self.env.reset()                                    # 随机在未知数据中挑选一个点
+            state = torch.tensor(self.env.x[state_index, :], dtype=torch.float32, device=self.device).unsqueeze(0)
             for _ in range(self.steps_per_episode):
                 action = np.random.randint(0, self.n_actions)           # 随机挑选一个行动
-                observation, reward, _, _ = self.env.step(action)       # 执行这个行动
-                reward = get_total_reward(reward, self.intrinsic_rewards, obs_index)
+                next_state_index, reward, _, _ = self.env.step(action)       # 执行这个行动
+                reward = get_total_reward(reward, self.intrinsic_rewards, state_index)
                 reward = torch.tensor([reward], device=self.device)
-                obs_index = observation
-                observation = torch.tensor(self.env.x[observation, :], dtype=torch.float32,
+                next_state = torch.tensor(self.env.x[next_state_index, :], dtype=torch.float32,
                                            device=self.device).unsqueeze(0)
-                next_state = observation
-                self.memory.push(state, torch.tensor([[action]], device=self.device), next_state, reward)
+                self.memory.push(state, torch.tensor([[action]], device=self.device), next_state, reward, state_index, next_state_index)
+                # 'state', 'action', 'next_state', 'reward', 'state_index', 'next_state_index'
                 state = next_state
+                state_index = next_state_index
 
     def fit(self, reset_nets=False):
         """
@@ -225,16 +225,15 @@ class DQNSS():
             self.reset_nets()
 
         # perform warmup steps
-        self.warmup_steps()
+        # self.warmup_steps()
 
         for i_episode in range(self.num_episodes):
             # Initialize the environment and get it's state
             reward_history = []
-            state = self.env.reset()  # 随机挑选一个未知点
+            state_index = self.env.reset()  # 随机挑选一个未知点
             #  mantain both the obervation as the dataset index and value
-            state_index = state
             # state为初始点的具体数值
-            state = torch.tensor(self.env.x[state, :], dtype=torch.float32, device=self.device).unsqueeze(0)
+            state = torch.tensor(self.env.x[state_index, :], dtype=torch.float32, device=self.device).unsqueeze(0)
 
             for t in range(self.steps_per_episode):
                 self.num_steps_done += 1
@@ -242,24 +241,22 @@ class DQNSS():
                 # select_action encapsulates the epsilon-greedy policy
                 action = self.select_action(state, self.num_steps_done)
 
-                observation, reward, _, _ = self.env.step(action.item())
+                next_state_index, reward, _, _ = self.env.step(action.item())
                 # states.append((self.env.x[observation,:],action.item()))
 
                 reward = get_total_reward(reward, self.intrinsic_rewards, state_index, write_rew=False)
 
                 reward_history.append(reward)
                 reward = torch.tensor([reward], dtype=torch.float32, device=self.device)
-                obs_index = observation
-                observation = torch.tensor(self.env.x[observation, :], dtype=torch.float32,
+                next_state = torch.tensor(self.env.x[next_state_index, :], dtype=torch.float32,
                                            device=self.device).unsqueeze(0)
-                next_state = observation    # 下一个要探索的点
 
                 # Store the transition in memory
-                self.memory.push(state, action, next_state, reward, state_index, obs_index)
+                self.memory.push(state, action, next_state, reward, state_index, next_state_index)
 
                 # Move to the next state
                 state = next_state
-                state_index = obs_index
+                state_index = next_state_index
 
                 # Perform one step of the optimization (on the policy network)
                 self.optimize_model()
@@ -270,7 +267,7 @@ class DQNSS():
                     self.target_net.load_state_dict(policy_net_state_dict)
                 # validation step
                 if self.num_steps_done % self.validation_frequency == 0:
-                    auc, pr = test_model(self.test_set, self.policy_net)
+                    auc, pr = test_model(self.test_X, self.test_Y,self.policy_net)
                     self.pr_auc_history.append(pr)
                     self.roc_auc_history.append(auc)
                 if self.num_steps_done % self.theta_update == 0:
@@ -313,4 +310,4 @@ class DQNSS():
         Test the model
         :param on_test_set: whether to test on the test set or the validation set
         """
-        return test_model(self.test_set, self.policy_net)
+        return test_model(self.test_X, self.test_Y, self.policy_net)

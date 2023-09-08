@@ -76,7 +76,8 @@ for dataset in dataset_name_lst:
             dplan = DQNSS(
                 env=env,
                 # validation_set=None,
-                test_set=test_data,
+                test_X=test_data,
+                test_Y=labels,
                 destination_path=args.model_dir,
                 double_dqn=False
             )

@@ -93,6 +93,9 @@ class TcnED(BaseDeepAD):
         total_loss = 0
         cnt = 0
         for batch_x in self.train_loader:
+            if cnt == 453:
+                cnt += 1
+                continue
             loss = self.training_forward(batch_x, self.net, self.criterion)
             self.net.zero_grad()
             loss.backward()
@@ -110,11 +113,13 @@ class TcnED(BaseDeepAD):
               f'training loss: {total_loss / cnt:.6f}, '
               f'time: {t:.1f}s')
 
+        self.net.eval()     # 使用完全的网络来计算
         train_loss_now = np.array([])
         for batch_x in self.train_loader:
             _, error = self.inference_forward(batch_x, self.net, self.criterion)
             train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
         self.loss_by_epoch.append(train_loss_now)
+        self.net.train()     # 使用完全的网络来计算
 
         if epoch == 0:
             self.epoch_time = t
@@ -124,7 +129,7 @@ class TcnED(BaseDeepAD):
         return train_loss_now
 
     def training_prepare(self, X, y):
-        train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=True)
+        train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=False)
 
         net = TcnAE(
             n_features=self.n_features,

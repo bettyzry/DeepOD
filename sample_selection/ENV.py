@@ -21,27 +21,25 @@ class ADEnv(gym.Env):
         :param label_anomaly: label of anomaly instances
         """
         super().__init__()
-        self.name = name
+        self.name = name            # 未使用
 
         # hyperparameters:
-        self.num_S = sampling_Du  # 在正常数据上采样的数量
+        self.num_S = sampling_Du    # 在正常数据上采样的数量
         self.normal = label_normal
         self.anomaly = label_anomaly
         self.prob = prob_au
 
         # Dataset infos: D_a and D_u
-        self.m, self.n = dataset.shape
-        self.n_feature = self.n - 1  # 特征量
-        self.n_samples = self.m  # 数据量
+        self.n_samples, self.n_feature = dataset.shape
         self.x = dataset[:, :self.n_feature]  # 原始数据
-        self.y = dataset[:, self.n_feature]  # 原始标签
+        self.y = np.array([self.normal for i in range(self.n_samples)])  # 原始标签
         self.dataset = dataset
         self.index_u = np.where(self.y == self.normal)[0]  # 标签为未知的数据的索引号
         self.index_a = np.where(self.y == self.anomaly)[0]  # 标签为异常的数据的索引号
         self.index_n = np.where(self.y == 2)[0]  # 标签为正常的数据的索引号           # 有错
 
         # observation space:
-        self.observation_space = spaces.Discrete(self.m)  # 大小为m的观测空间
+        self.observation_space = spaces.Discrete(self.n_samples)  # 大小为m的观测空间   # 未使用
 
         # action space: 0 or 1
         self.action_space = spaces.Discrete(2)  # 大小为2的行为空间

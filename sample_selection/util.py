@@ -65,13 +65,12 @@ def plot_roc_pr(test_set, policy_net):
     _ = display.ax_.set_title("2-class Precision-Recall curve")
 
 
-def test_model(test_set, policy_net):
+def test_model(test_X, test_y, policy_net):
     policy_net.eval()
-    test_X, test_y = test_set[:, :-1], test_set[:, -1]
-    pred_y = policy_net(test_X).detach().cpu().numpy()[:, 1]
+    outlier_score = policy_net(test_X).detach().cpu().numpy()[:, 1]
 
-    roc = roc_auc_score(test_y, pred_y)
-    pr = average_precision_score(test_y, pred_y)
+    roc = roc_auc_score(test_y, outlier_score)
+    pr = average_precision_score(test_y, outlier_score)
     policy_net.train()
     return roc, pr
 
