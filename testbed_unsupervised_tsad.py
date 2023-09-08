@@ -25,7 +25,7 @@ parser.add_argument("--output_dir", type=str, default='@records/',
 parser.add_argument("--loss_dir", type=str, default='@losses/',
                     help="the output file path")
 parser.add_argument("--dataset", type=str,
-                    default='MSL',
+                    default='ASD,SMAP',
                     help='ASD,SMAP,MSL,SWaT_cut'
                     )
 parser.add_argument("--entities", type=str,

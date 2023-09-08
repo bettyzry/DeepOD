@@ -428,14 +428,14 @@ class BaseDeepAD(metaclass=ABCMeta):
         if self.sample_selection == 0:          # 无操作
             pass
         elif self.sample_selection == 1:        # 保留delta最小的80%
-            if len(self.train_data) < int(self.n_samples*0.3):
-                return train_loss_past
+            # if len(self.train_data) < int(self.n_samples*0.3):
+            #     return train_loss_past
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
             delta = train_loss_now - train_loss_past
             index = delta.argsort()[:save_num]
             self.train_data = self.train_data[np.sort(index)]
             train_loss_past = train_loss_now[np.sort(index)]
-            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
+            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                       shuffle=True, pin_memory=True)
         elif self.sample_selection == 2:        # 按概率密度
             res_freq = stats.relfreq(train_loss_now, numbins=50)  # numbins 是统计一次的间隔(步长)是多大

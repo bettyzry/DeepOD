@@ -124,7 +124,7 @@ class TcnED(BaseDeepAD):
         return train_loss_now
 
     def training_prepare(self, X, y):
-        train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True)
+        train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         net = TcnAE(
             n_features=self.n_features,
