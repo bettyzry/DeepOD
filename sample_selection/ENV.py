@@ -1,8 +1,8 @@
 import gym
-import time
 import numpy as np
 
 from gym import spaces
+from ssutil import percentile
 
 
 class ADEnv(gym.Env):
@@ -10,63 +10,59 @@ class ADEnv(gym.Env):
     Customized environment for anomaly detection
     """
 
-    def __init__(self, dataset: np.ndarray, sampling_Du=1000, prob_au=0.5, label_normal=0, label_anomaly=1,
-                 name="default"):
+    def __init__(self, dataset: np.ndarray, seq_len=30, stride=1,
+                 num_sample=1000):
         """
         Initialize anomaly environment for DPLAN algorithm.
-        :param dataset: Input dataset in the form of 2-D array. The Last column is the label.
-        :param sampling_Du: Number of sampling on D_u for the generator g_u
-        :param prob_au: Probability of performing g_a.
-        :param label_normal: label of normal instances
-        :param label_anomaly: label of anomaly instances
+        :param num_sample: Number of sampling for the generator g_u
         """
         super().__init__()
-        self.name = name            # 未使用
-
-        # hyperparameters:
-        self.num_S = sampling_Du    # 在正常数据上采样的数量
-        self.normal = label_normal
-        self.anomaly = label_anomaly
-        self.prob = prob_au
+        self.seq_len = seq_len
+        self.stride = stride
 
         # Dataset infos: D_a and D_u
         self.n_samples, self.n_feature = dataset.shape
-        self.x = dataset[:, :self.n_feature]  # 原始数据
-        self.y = np.array([self.normal for i in range(self.n_samples)])  # 原始标签
-        self.dataset = dataset
-        self.index_u = np.where(self.y == self.normal)[0]  # 标签为未知的数据的索引号
-        self.index_a = np.where(self.y == self.anomaly)[0]  # 标签为异常的数据的索引号
-        self.index_n = np.where(self.y == 2)[0]  # 标签为正常的数据的索引号           # 有错
+        self.x = dataset                                                                # 原始数据
+        self.x_seq_index = np.arange(0, self.n_samples - seq_len + 1, stride)           # 训练集序列的索引标签（初始化为无重复的序列开头）
+        self.x_seqs = np.array([self.x[i:i + self.seq_len] for i in self.x_seq_index])       # 当前的训练集序列（初始化为无重复的序列）
 
-        # observation space:
-        self.observation_space = spaces.Discrete(self.n_samples)  # 大小为m的观测空间   # 未使用
+        # hyper parameter
+        # 贪婪算法选择行动时，为了提高效率进行了采样。如果训练集少于numsample，则使用全集
+        self.num_sample = min(num_sample, len(self.x_seq_index))
+
+        # state space:
+        self.state_space = spaces.Discrete(self.n_samples)                              # 状态空间（全部的训练集)
 
         # action space: 0 or 1
-        self.action_space = spaces.Discrete(2)  # 大小为2的行为空间
+        self.action_space = spaces.Discrete(2)                                          # 0删除，1扩展
 
         # initial state
         self.counts = None
-        self.state = None
+        self.state_a = None              # state in all data 当前状态在全部数据中的索引值
+        self.state_t = None              # state in training data当前状态在训练集里的索引值
         self.DQN = None
+        self.loss = []
 
-    def generater_a(self, *args, **kwargs):  # 随机选择一个异常数据
+    def from_sa2st(self, sa):
+        st = np.where(self.x_seq_index == sa)[0][0]
+        return st
+
+    def from_st2sa(self, st):
+        sa = self.x_seq_index[st]
+        return sa
+
+    def generater_r(self, *args, **kwargs):  # 从当前训练集中随机选择一个序列
         # sampling function for D_a
-        index = np.random.choice(self.index_u)
-
+        index = np.random.choice(self.x_seq_index)
         return index
 
-    def generater_n(self, *args, **kwargs):  # 随机选择一个正常数据
-        # sampling function for D_n
-        index = np.random.choice(self.index_u)
-
-        return index
-
-    def generate_u(self, action, s_t):
-        # acton: 行动，s_t: 当前状态？
+    def generate_u(self, action, s_a, s_t):
+        # 对状态s_t要执行action操作
         # sampling function for D_u
-        S = np.random.choice(self.index_u, self.num_S)  # 在所有的正常数据中随机采num_S个        # 处于效率考虑，在子样本上选择，而非全集
+        # 在所有的训练集中随机采num_S个，S为采样数据in all data的索引号               # 为了效率
+        S = np.random.choice(self.x_seq_index, self.num_sample)
         # calculate distance in the space of last hidden layer of DQN
-        all_x = self.x[np.append(S, s_t)]  # 提取全部采样点+当前位置对应的数据的值
+        all_x = self.x_seqs[S].append(self.x[s_t: s_t+self.seq_len])         # 提取全部采样点+当前位置，对应的数据的值
 
         all_dqn_s = self.DQN.get_latent(all_x)  # 提取数据的表征
         all_dqn_s = all_dqn_s.cpu().detach().numpy()
@@ -75,56 +71,66 @@ class ADEnv(gym.Env):
 
         dist = np.linalg.norm(dqn_s - dqn_st, axis=1)  # 采样数据点与当前状态st的距离
 
-        if action == 1:  # 找距离当前状态最小的，a0将给定观测点标记为正常
-            loc = np.argmin(dist)
-        elif action == 0:  # 找距离当前状态最大的，a1将给定观测点标记为异常
-            loc = np.argmax(dist)
-        index = S[loc]  # 最终选中的点
+        if action == 1:                                                         # 扩展该数据
+            loc = np.argmin(dist)                                               # 找最像的
+        else:                                                                   # 删除该数据
+            loc = np.argmax(dist)                                               # 找最不像的
+        return S[loc]
 
-        return index
-
-    def reward_h(self, action, s_t):
-        # Anomaly-biased External Handcrafted Reward Function h
-        if (action == 1) & (s_t in self.index_a):  # 行动为将给定点标记为异常，并且该点确实在异常列表中
-            return 1
-        elif (action == 0) & (s_t in self.index_n):  # 行动为将给定点标记为正常，并且该点确实在正常列表中
-            return 1
-        elif (action == 0) & (s_t in self.index_u):  # 行动为将给定点标记为正常，但该点在未知列表中
-            return 0
-        elif (action == 1) & (s_t in self.index_u):  # 行动为将给定点标记为异常，但该点在未知列表中
-            return -0.5
-        return -1
+    def reward_h(self, action, state_t):                                        # 待修改
+        # 根据梯度密度、关键参数，确定收益，被扩展的数据的loss位置、分布
+        threshold2 = percentile(self.loss, 0.2)
+        threshold8 = percentile(self.loss, 0.8)
+        if action == 0:     # 删除该点
+            if self.loss[state_t] >= threshold8:
+                return 1
+            elif self.loss[state_t] <= threshold2:
+                return -1
+            else:
+                return 0
+        else:
+            if self.loss[state_t] >= threshold8:
+                return -1
+            elif self.loss[state_t] <= threshold2:
+                return 1
+            else:
+                return 0
 
     def step(self, action):
-        self.state = int(self.state)
+        self.state_a = int(self.state_a)
+        self.state_t = int(self.state_t)
         # store former state
-        s_t = self.state
+        state_a = self.state_a
+        state_t = self.state_t
         # choose generator
 
-        # 以p的概率随机在三个采样器中选择一个函数
-        g = np.random.choice([self.generater_a, self.generate_u, self.generater_n], p=[0.4, 0.2, 0.4])
-        s_tp1 = g(action, s_t)  # 找到下一个要探索的点
+        # 以p的概率随机在2个采样器中选择一个函数
+        g = np.random.choice([self.generater_r, self.generate_u], p=[0.5, 0.5])
+        state_a1 = g(action, state_a, state_t)  # 找到下一个要探索的点
+        state_t1 = self.from_sa2st(state_a1)
 
         # change to the next state
-        self.state = s_tp1
-        self.state = int(self.state)
+        self.state_t = state_t1
+        self.state_a = state_a1
+        self.state_a = int(self.state_a)
+        self.state_t = int(self.state_t)
         self.counts += 1
 
         # calculate the reward
-        reward = self.reward_h(action, s_t)
+        reward = self.reward_h(action, state_t)        # 当前的行为能获得多大的收益
 
         # done: whether terminal or not
         done = False
 
         # info
-        info = {"State t": s_t, "Action t": action, "State t+1": s_tp1}
+        info = {"State t": state_a, "Action t": action, "State t+1": state_a1}
 
-        return self.state, reward, done, info
+        return self.state_a, reward, done, info
 
-    def reset(self):
+    def reset_state(self):
         # reset the status of environment
         self.counts = 0
         # the first observation is uniformly sampled from the D_u
-        self.state = np.random.choice(self.index_u)
+        self.state_a = np.random.choice(self.x_seq_index)
 
-        return self.state
+        return self.state_a

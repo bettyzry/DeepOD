@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from util import hyper, DQN_iforest, get_total_reward, test_model
+from ssutil import hyper, DQN_iforest, get_total_reward, test_model
 from ENV import ADEnv
 
 import torch
@@ -27,7 +27,7 @@ class DQNSS():
     DPLAN agent that encapsulates the training and testing of the DQN
     """
 
-    def __init__(self, env: ADEnv, test_X, test_Y,destination_path, device='cpu', double_dqn=True):
+    def __init__(self, env: ADEnv, test_X, test_Y, destination_path, device='gpu', double_dqn=True):
         """
         Initialize the DPLAN agent
         :param env: the environment
@@ -99,7 +99,6 @@ class DQNSS():
         # not sure if this works
         # self.policy_net._initialize_weights()
         self.target_net = DQN(self.n_observations, self.hidden_size, self.n_actions, device=self.device).to(self.device)
-        self.val_net = DQN(self.n_observations, self.hidden_size, self.n_actions, device=self.device).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())       # 加载存储好的网络
         # set target net weights to 0
         with torch.no_grad():
@@ -197,7 +196,7 @@ class DQNSS():
         Implement the warmup steps to fill the replay memory using random actions
         """
         for _ in range(self.num_warmup_steps):
-            state_index = self.env.reset()                                    # 随机在未知数据中挑选一个点
+            state_index = self.env.reset_state()                                    # 随机在未知数据中挑选一个点
             state = torch.tensor(self.env.x[state_index, :], dtype=torch.float32, device=self.device).unsqueeze(0)
             for _ in range(self.steps_per_episode):
                 action = np.random.randint(0, self.n_actions)           # 随机挑选一个行动
@@ -230,7 +229,7 @@ class DQNSS():
         for i_episode in range(self.num_episodes):
             # Initialize the environment and get it's state
             reward_history = []
-            state_index = self.env.reset()  # 随机挑选一个未知点
+            state_index = self.env.reset_state()  # 随机挑选一个未知点
             #  mantain both the obervation as the dataset index and value
             # state为初始点的具体数值
             state = torch.tensor(self.env.x[state_index, :], dtype=torch.float32, device=self.device).unsqueeze(0)
@@ -288,7 +287,16 @@ class DQNSS():
         :param model_name: name of the model
         """
         file_path = os.path.join(self.destination_path, model_name)
-        torch.save(self.val_net.state_dict(), file_path)
+        torch.save(self.policy_net.state_dict(), file_path)
+
+    def load_model(self, model_name):
+        """
+        Save the model
+        :param model_name: name of the model
+        """
+        file_path = os.path.join(self.destination_path, model_name)
+        self.policy_net.load_state_dict(torch.load(file_path))
+        self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def show_results(self):
         """
