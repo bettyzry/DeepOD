@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from ssutil import hyper, DQN_iforest, get_total_reward, test_model
+from ssutil import DQN_iforest, get_total_reward, test_model
 from ENV import ADEnv
 
 import torch
@@ -27,7 +27,11 @@ class DQNSS():
     DPLAN agent that encapsulates the training and testing of the DQN
     """
 
-    def __init__(self, env: ADEnv, test_X, test_Y, destination_path, device='gpu', double_dqn=True):
+    def __init__(self, env: ADEnv, test_X, test_Y, destination_path, device='gpu', double_dqn=True,
+                 n_episodes=6, steps_per_episode=2000, max_memory=100000, eps_max=1, eps_min=0.1,
+                 eps_decay=10000, hidden_size=10, learning_rate=0.25e-4, momentum=0.95,
+                 min_squared_gradient=0.1, warmup_steps=100, gamma=0.99, batch_size=64,
+                 target_update=5000, theta_update=2000, validation_frequency=100, weight_decay=1e-3):
         """
         Initialize the DPLAN agent
         :param env: the environment
@@ -51,27 +55,27 @@ class DQNSS():
         self.x_tensor = torch.tensor(env.x, dtype=torch.float32, device=device)
 
         # hyperparameters setup
-        self.hidden_size = hyper['hidden_size']
-        self.BATCH_SIZE = hyper['batch_size']
-        self.GAMMA = hyper['gamma']
-        self.EPS_START = hyper['eps_max']
-        self.EPS_END = hyper['eps_min']
-        self.EPS_DECAY = hyper['eps_decay']
-        self.LR = hyper['learning_rate']
-        self.momentum = hyper['momentum']
-        self.min_squared_gradient = hyper['min_squared_gradient']
-        self.num_episodes = hyper['n_episodes']
-        self.num_warmup_steps = hyper['warmup_steps']
-        self.steps_per_episode = hyper['steps_per_episode']
-        self.max_memory_size = hyper['max_memory']
-        self.target_update = hyper['target_update']
-        self.validation_frequency = hyper['validation_frequency']
-        self.theta_update = hyper['theta_update']
-        self.weight_decay = hyper['weight_decay']
+        self.hidden_size = hidden_size
+        self.BATCH_SIZE = batch_size
+        self.GAMMA = gamma
+        self.EPS_START = eps_max
+        self.EPS_END = eps_min
+        self.EPS_DECAY = eps_decay
+        self.LR = learning_rate
+        self.momentum = momentum
+        self.min_squared_gradient = min_squared_gradient
+        self.num_episodes = n_episodes
+        self.num_warmup_steps = warmup_steps
+        self.steps_per_episode = steps_per_episode
+        self.max_memory_size = max_memory
+        self.target_update =target_update
+        self.validation_frequency = validation_frequency
+        self.theta_update = theta_update
+        self.weight_decay = weight_decay
 
         #  n actions and n observations
         self.n_actions = env.action_space.n  # 可以执行的行动的数量
-        self.n_observations = env.n_feature  # 有错？？
+        self.n_feature = env.n_feature  # 有错？？
 
         #  resetting the agent
         self.reset_nets()
@@ -95,10 +99,10 @@ class DQNSS():
 
     def reset_nets(self):
         # net definition
-        self.policy_net = DQN(self.n_observations, self.hidden_size, self.n_actions, device=self.device).to(self.device)
+        self.policy_net = DQN(self.n_feature, self.hidden_size, self.n_actions, device=self.device).to(self.device)
         # not sure if this works
         # self.policy_net._initialize_weights()
-        self.target_net = DQN(self.n_observations, self.hidden_size, self.n_actions, device=self.device).to(self.device)
+        self.target_net = DQN(self.n_feature, self.hidden_size, self.n_actions, device=self.device).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())       # 加载存储好的网络
         # set target net weights to 0
         with torch.no_grad():

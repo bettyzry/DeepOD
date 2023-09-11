@@ -14,11 +14,11 @@ class DQN(nn.Module):
     Deep Q Network
     """
 
-    def __init__(self, n_observations, hidden_size, n_actions, device='cpu'):
+    def __init__(self, n_feature, hidden_size, n_actions, device='gpu'):
         super(DQN, self).__init__()
         self.device = device
         self.latent = nn.Sequential(
-            nn.Linear(n_observations, hidden_size),
+            nn.Linear(n_feature, hidden_size),
         )
         self.output_layer = nn.Linear(hidden_size, n_actions)
 

@@ -6,33 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-hyper = {
-    'base_save_path': 'models/',
-    'n_episodes': 6,
-    'steps_per_episode': 2000,
-    'max_memory': 100_000,
-    'eps_max': 1,
-    'eps_min': 0.1,
-    'eps_decay': 10_000,
-    'hidden_size': 20,
-    'learning_rate': 0.25e-4,
-    'momentum': 0.95,
-    'min_squared_gradient': 0.01,
-    'warmup_steps': 100,
-    'gamma': 0.99,
-    'batch_size': 64,
-    'target_update': 5_000,
-    'theta_update': 2_000,
-    'num_anomaly_knows': 60,
-    'contamination_rate': 0.02,
-    'runs': 1,
-    'S_size': 2000,
-    'sampling_du': 1000,
-    'prob_au': 0.4,
-    'validation_frequency': 100,
-    'weight_decay': 1e-3,
-}
-
 
 def DQN_iforest(x, model):
     # iforest function on the penuli-layer space of DQN

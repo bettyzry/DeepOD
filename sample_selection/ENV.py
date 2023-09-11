@@ -20,7 +20,7 @@ class ADEnv(gym.Env):
         self.seq_len = seq_len
         self.stride = stride
 
-        # Dataset infos: D_a and D_u
+        # Dataset infos
         self.n_samples, self.n_feature = dataset.shape
         self.x = dataset                                                                # 原始数据
         self.x_seq_index = np.arange(0, self.n_samples - seq_len + 1, stride)           # 训练集序列的索引标签（初始化为无重复的序列开头）

@@ -1,4 +1,4 @@
-from util import hyper, write_results
+from ssutil import write_results
 from ENV import ADEnv
 from DQNSS import DQNSS
 import torch
@@ -25,14 +25,10 @@ parser.add_argument("--entities", type=str,
                     help='FULL represents all the csv file in the folder, '
                          'or a list of entity names split by comma '    # ['D-14', 'D-15']
                     )
-parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-args = parser.parse_args()
 
-LABEL_NORMAL = 0
-LABEL_ANOMALY = 1
-CONTAMINATION_RATE = hyper['contamination_rate']
-NUM_ANOMALY_KNOWS = hyper['num_anomaly_knows']
-NUM_RUNS = hyper['runs']
+parser.add_argument("--runs", type=int, default=1)
+parser.add_argument("--num_sample", type=int, default=1000)
+args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 results_filename = os.path.join(args.output_dir, 'results.csv')
@@ -61,21 +57,17 @@ for dataset in dataset_name_lst:
         pr_auc_history = []
         roc_auc_history = []
 
-        for i in range(NUM_RUNS):
+        for i in range(args.runs):
             print(f'Running {dataset} {i}...')
-            model_id = f'_{CONTAMINATION_RATE}_{NUM_ANOMALY_KNOWS}_run_{i}'
+            model_id = f'_run_{i}'
 
             env = ADEnv(
                 dataset=train_data,
-                sampling_Du=hyper['sampling_du'],
-                prob_au=hyper['prob_au'],
-                label_normal=LABEL_NORMAL,
-                label_anomaly=LABEL_ANOMALY
+                num_sample=args.num_sample
             )
 
             dplan = DQNSS(
                 env=env,
-                # validation_set=None,
                 test_X=test_data,
                 test_Y=labels,
                 destination_path=args.model_dir,
