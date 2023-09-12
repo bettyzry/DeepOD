@@ -111,10 +111,10 @@ for dataset in dataset_name_lst:
             t1 = time.time()
             clf = model_class(**model_configs, random_state=42+i)
             clf.sample_selection = args.sample_selection
-            clf.fit(train_data)
-            scores = clf.decision_function(test_data)
+            clf.fit(train_data, None, test_data, labels)
             t = time.time() - t1
 
+            scores = clf.decision_function(test_data)
             eval_metrics = ts_metrics(labels, scores)
             adj_eval_metrics = ts_metrics(labels, point_adjustment(labels, scores))
 

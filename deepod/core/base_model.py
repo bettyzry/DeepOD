@@ -148,6 +148,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.save_rate = 0.8
         self.train_loss_now = None
         self.train_loss_past = None
+        self.thresh = 4e-6
         return
 
     def fit(self, X, y=None):
@@ -465,40 +466,28 @@ class BaseDeepAD(metaclass=ABCMeta):
                 return
 
             self.net.eval()
-            metrics = []
             params = [p for p in self.net.parameters() if p.requires_grad]
-
+            num_key_params = []
+            all_v = torch.cat([param.data.view(-1) for param in params])
             for ii, batch_x in enumerate(self.train_loader):
                 batch_x = batch_x.float().to(self.device)
                 output, _ = self.net(batch_x)
                 loss = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
                 losses = torch.mean(loss, 1)
 
-                all_v = torch.cat([param.data.view(-1) for param in params])
                 for loss in losses:
+                    # 有提速空间 #
                     g_loss = grad(loss, params, create_graph=True)
                     g_loss = [g.view(-1) for g in g_loss]
                     all_g = torch.cat(g_loss)
-                    # all_v = torch.cat(loss.view(-1))
+                    # 有提速空间 #
                     metric = torch.abs(all_g * all_v)
-                    metrics.append(metric)      # .cpu().detach().numpy()
-                # self.net.zero_grad()
-            self.net.train()
-
-            all_metric = torch.cat(metrics)
-            num_params = all_metric.size(0)
-            nonzero_ratio = 0.6
-            nz = int(nonzero_ratio * num_params)
-            top_values, _ = torch.topk(all_metric, nz)
-            thresh = top_values[-1]
-
-            num_key_params = []
-            for metric in metrics:
-                key_param = (metric >= thresh).type(torch.cuda.FloatTensor)
-                num_key_param = torch.sum(key_param)
-                num_key_params.append(num_key_param.item())
+                    key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
+                    num_key_param = torch.sum(key_param)
+                    num_key_params.append(num_key_param.item())
                 # num_key_params = np.concatenate([num_key_params, num_key_param.cpu().detach().numpy()])
             num_key_params = np.array(num_key_params)
+            self.net.train()
 
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
             # save_num = int(self.save_rate * len(self.train_data))

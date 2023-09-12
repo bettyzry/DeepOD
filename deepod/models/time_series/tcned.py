@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from deepod.core.base_model import BaseDeepAD
 from deepod.core.networks.ts_network_tcn import TcnAE
 from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label
+from deepod.metrics import ts_metrics, point_adjustment
 
 
 class TcnED(BaseDeepAD):
@@ -31,7 +32,7 @@ class TcnED(BaseDeepAD):
 
         return
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, X_test=None, Y_test=None):
         """
         Fit detector. y is ignored in unsupervised methods.
 
@@ -78,6 +79,14 @@ class TcnED(BaseDeepAD):
             for epoch in range(self.epochs):
                 self.training(epoch)
                 self.do_sample_selection()
+
+                scores = self.net.decision_function(X_test)
+                eval_metrics = ts_metrics(Y_test, scores)
+                adj_eval_metrics = ts_metrics(Y_test, point_adjustment(Y_test, scores))
+                txt = ''.join(['%.4f' % a for a in eval_metrics]) + \
+                       ', pa, ' + \
+                       ', '.join(['%.4f' % a for a in adj_eval_metrics])
+                print(txt)
 
         # if self.verbose >= 1:
         #     print('Start Inference on the training data...')
