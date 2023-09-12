@@ -32,7 +32,7 @@ class TcnED(BaseDeepAD):
 
         return
 
-    def fit(self, X, y=None, X_test=None, Y_test=None):
+    def fit(self, X, y=None):
         """
         Fit detector. y is ignored in unsupervised methods.
 
@@ -51,11 +51,20 @@ class TcnED(BaseDeepAD):
             Fitted estimator.
         """
         if self.data_type == 'ts':
-            X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
-            y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
-            self.train_data = X_seqs
-            self.train_label = y_seqs
-            self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
+            if self.sample_selection == 4:
+                self.ori_data = X
+                self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)     # 无重叠计算seq
+                X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
+                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
+                self.train_data = X_seqs
+                self.train_label = y_seqs
+                self.n_samples, self.n_features = X.shape
+            else:
+                X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
+                self.train_data = X_seqs
+                self.train_label = y_seqs
+                self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
         else:
             self.train_data = X
             self.train_label = y
@@ -79,14 +88,6 @@ class TcnED(BaseDeepAD):
             for epoch in range(self.epochs):
                 self.training(epoch)
                 self.do_sample_selection()
-
-                scores = self.net.decision_function(X_test)
-                eval_metrics = ts_metrics(Y_test, scores)
-                adj_eval_metrics = ts_metrics(Y_test, point_adjustment(Y_test, scores))
-                txt = ''.join(['%.4f' % a for a in eval_metrics]) + \
-                       ', pa, ' + \
-                       ', '.join(['%.4f' % a for a in adj_eval_metrics])
-                print(txt)
 
         # if self.verbose >= 1:
         #     print('Start Inference on the training data...')

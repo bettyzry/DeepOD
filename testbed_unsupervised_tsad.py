@@ -24,6 +24,8 @@ parser.add_argument("--output_dir", type=str, default='@records/',
                     help="the output file path")
 parser.add_argument("--loss_dir", type=str, default='@losses/',
                     help="the output file path")
+parser.add_argument("--key_params_num_dir", type=str, default='@key_params_num/',
+                    help="the output file path")
 parser.add_argument("--dataset", type=str,
                     default='ASD,SMAP,MSL',
                     help='ASD,SMAP,MSL,SWaT_cut'
@@ -69,9 +71,11 @@ cur_time = time.strftime("%m-%d %H.%M.%S", time.localtime())
 os.makedirs(args.output_dir, exist_ok=True)
 result_file = os.path.join(args.output_dir, f'{args.model}.{args.flag}.csv')
 # # setting loss file/folder path
-funcs = ['norm', 'min', 'distribution', 'imp_param']
+funcs = ['norm', 'min', 'distribution', 'imp_param', "imp_param_adding"]
 loss_dir = f'{args.loss_dir}/{args.model}.{args.flag}/'
 os.makedirs(loss_dir, exist_ok=True)
+key_params_num_dir = f'{args.key_params_num_dir}/{args.model}.{args.flag}/'
+os.makedirs(key_params_num_dir, exist_ok=True)
 
 
 # # print header in the result file
@@ -111,7 +115,7 @@ for dataset in dataset_name_lst:
             t1 = time.time()
             clf = model_class(**model_configs, random_state=42+i)
             clf.sample_selection = args.sample_selection
-            clf.fit(train_data, None, test_data, labels)
+            clf.fit(train_data)
             t = time.time() - t1
 
             scores = clf.decision_function(test_data)
@@ -129,9 +133,13 @@ for dataset in dataset_name_lst:
             entries.append(adj_eval_metrics)
             t_lst.append(t)
 
-            os.path.join(args.output_dir, f'{args.model}.{args.flag}.csv')
-            loss_df = pd.DataFrame(clf.loss_by_epoch)
-            loss_df.to_csv(loss_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
+            if args.sample_selection == 1:
+                loss_df = pd.DataFrame(clf.loss_by_epoch)
+                loss_df.to_csv(loss_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
+
+            if args.sample_selection == 3 or args.sample_selection == 4:
+                key_params_num_df = pd.DataFrame(clf.key_params_num_by_epoch)
+                key_params_num_df.to_csv(key_params_num_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
 
         avg_entry = np.average(np.array(entries), axis=0)
         std_entry = np.std(np.array(entries), axis=0)
