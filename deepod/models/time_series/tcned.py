@@ -71,14 +71,13 @@ class TcnED(BaseDeepAD):
         for _ in range(self.n_ensemble):
             self.train_loader, self.net, self.criterion = self.training_prepare(self.train_data,
                                                                             y=self.train_label)
-            optimizer = torch.optim.Adam(self.net.parameters(),
+            self.optimizer = torch.optim.Adam(self.net.parameters(),
                                          lr=self.lr,
                                          eps=1e-6)
             self.net.train()
-            train_loss_past = np.array([0 for i in range(len(self.train_data))])
             for epoch in range(self.epochs):
-                train_loss_now = self.training(optimizer, epoch)
-                train_loss_past = self.do_sample_selection(train_loss_now, train_loss_past)
+                self.training(epoch)
+                self.do_sample_selection()
 
         # if self.verbose >= 1:
         #     print('Start Inference on the training data...')
@@ -88,18 +87,15 @@ class TcnED(BaseDeepAD):
 
         return self
 
-    def training(self, optimizer, epoch):
+    def training(self, epoch):
         t1 = time.time()
         total_loss = 0
         cnt = 0
         for batch_x in self.train_loader:
-            if cnt == 453:
-                cnt += 1
-                continue
             loss = self.training_forward(batch_x, self.net, self.criterion)
             self.net.zero_grad()
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
 
             total_loss += loss.item()
             cnt += 1
@@ -113,20 +109,11 @@ class TcnED(BaseDeepAD):
               f'training loss: {total_loss / cnt:.6f}, '
               f'time: {t:.1f}s')
 
-        self.net.eval()     # 使用完全的网络来计算
-        train_loss_now = np.array([])
-        for batch_x in self.train_loader:
-            _, error = self.inference_forward(batch_x, self.net, self.criterion)
-            train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
-        self.loss_by_epoch.append(train_loss_now)
-        self.net.train()     # 使用完全的网络来计算
-
         if epoch == 0:
             self.epoch_time = t
 
         self.epoch_update()
-
-        return train_loss_now
+        return
 
     def training_prepare(self, X, y):
         train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=False)

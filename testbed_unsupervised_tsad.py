@@ -25,13 +25,13 @@ parser.add_argument("--output_dir", type=str, default='@records/',
 parser.add_argument("--loss_dir", type=str, default='@losses/',
                     help="the output file path")
 parser.add_argument("--dataset", type=str,
-                    default='MSL,ASD,SMAP',
+                    default='ASD,SMAP,MSL',
                     help='ASD,SMAP,MSL,SWaT_cut'
                     )
 parser.add_argument("--entities", type=str,
                     default='FULL',
                     help='FULL represents all the csv file in the folder, '
-                         'or a list of entity names split by comma '    # ['D-14', 'D-15']
+                         'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
 parser.add_argument("--model", type=str, default='TcnED', help="TimesNet")
@@ -43,7 +43,7 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=1)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=3)      # 0：不划窗，1：min划窗
 
 args = parser.parse_args()
 
@@ -69,7 +69,7 @@ cur_time = time.strftime("%m-%d %H.%M.%S", time.localtime())
 os.makedirs(args.output_dir, exist_ok=True)
 result_file = os.path.join(args.output_dir, f'{args.model}.{args.flag}.csv')
 # # setting loss file/folder path
-funcs = ['norm', 'min', 'max']
+funcs = ['norm', 'min', 'distribution', 'imp_param']
 loss_dir = f'{args.loss_dir}/{args.model}.{args.flag}/'
 os.makedirs(loss_dir, exist_ok=True)
 

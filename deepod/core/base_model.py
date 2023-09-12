@@ -16,6 +16,7 @@ from deepod.core.networks.base_networks import sequential_net_name
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from scipy import stats
+from torch.autograd import grad
 
 
 class BaseDeepAD(metaclass=ABCMeta):
@@ -145,6 +146,8 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.loss_by_epoch = []
         self.sample_selection = sample_selection
         self.save_rate = 0.8
+        self.train_loss_now = None
+        self.train_loss_past = None
         return
 
     def fit(self, X, y=None):
@@ -424,21 +427,86 @@ class BaseDeepAD(metaclass=ABCMeta):
         # torch.backends.cudnn.benchmark = False
         # torch.backends.cudnn.deterministic = True
 
-    def do_sample_selection(self, train_loss_now, train_loss_past):
+    def do_sample_selection(self):
         if self.sample_selection == 0:          # 无操作
             pass
+
         elif self.sample_selection == 1:        # 保留delta最小的80%
-            if len(self.train_data) < int(self.n_samples*0.3):
-                return train_loss_past
+            if len(self.train_data) <= int(self.n_samples*0.3):
+                return
+
+            # 计算损失值
+            self.net.eval()                     # 使用完全的网络来计算
+            train_loss_now = np.array([])
+            for batch_x in self.train_loader:
+                _, error = self.inference_forward(batch_x, self.net, self.criterion)
+                train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
+            self.loss_by_epoch.append(train_loss_now)
+            self.net.train()  # 使用完全的网络来计算
+
+            if self.train_loss_past is None:    # 第一轮迭代，直接返回
+                self.train_loss_past = self.train_loss_now
+                return
+
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
             # save_num = int(self.save_rate * len(self.train_data))
-            delta = train_loss_now - train_loss_past
+            delta = self.train_loss_now - self.train_loss_past
             index = delta.argsort()[:save_num]
             self.train_data = self.train_data[np.sort(index)]
-            train_loss_past = train_loss_now[np.sort(index)]
+            self.train_loss_past = self.train_loss_now[np.sort(index)]
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                       shuffle=True, pin_memory=True)
-        elif self.sample_selection == 2:        # 按概率密度
-            res_freq = stats.relfreq(train_loss_now, numbins=50)  # numbins 是统计一次的间隔(步长)是多大
 
-        return train_loss_past
+        elif self.sample_selection == 2:        # 按概率密度
+            res_freq = stats.relfreq(self.train_loss_now, numbins=50)  # numbins 是统计一次的间隔(步长)是多大
+
+        elif self.sample_selection == 3:        # 待修改
+            if len(self.train_data) <= int(self.n_samples*0.3):
+                return
+
+            self.net.eval()
+            metrics = []
+            params = [p for p in self.net.parameters() if p.requires_grad]
+
+            for ii, batch_x in enumerate(self.train_loader):
+                batch_x = batch_x.float().to(self.device)
+                output, _ = self.net(batch_x)
+                loss = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
+                losses = torch.mean(loss, 1)
+
+                all_v = torch.cat([param.data.view(-1) for param in params])
+                for loss in losses:
+                    g_loss = grad(loss, params, create_graph=True)
+                    g_loss = [g.view(-1) for g in g_loss]
+                    all_g = torch.cat(g_loss)
+                    # all_v = torch.cat(loss.view(-1))
+                    metric = torch.abs(all_g * all_v)
+                    metrics.append(metric)      # .cpu().detach().numpy()
+                # self.net.zero_grad()
+            self.net.train()
+
+            all_metric = torch.cat(metrics)
+            num_params = all_metric.size(0)
+            nonzero_ratio = 0.6
+            nz = int(nonzero_ratio * num_params)
+            top_values, _ = torch.topk(all_metric, nz)
+            thresh = top_values[-1]
+
+            num_key_params = []
+            for metric in metrics:
+                key_param = (metric >= thresh).type(torch.cuda.FloatTensor)
+                num_key_param = torch.sum(key_param)
+                num_key_params.append(num_key_param.item())
+                # num_key_params = np.concatenate([num_key_params, num_key_param.cpu().detach().numpy()])
+            num_key_params = np.array(num_key_params)
+
+            save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
+            # save_num = int(self.save_rate * len(self.train_data))
+            index = num_key_params.argsort()[::-1][:save_num]
+            self.train_data = self.train_data[np.sort(index)]
+            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
+                                      shuffle=True, pin_memory=True)
+
+
+        else:
+            print('ERROR')
