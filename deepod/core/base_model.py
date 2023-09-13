@@ -17,6 +17,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from scipy import stats
 from torch.autograd import grad
+from testbed.utils import split
 
 
 class BaseDeepAD(metaclass=ABCMeta):
@@ -147,11 +148,13 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.key_params_num_by_epoch = []
         self.sample_selection = sample_selection
         self.save_rate = 0.8
+        self.add_rate = 0.2
         self.train_loss_now = None
         self.train_loss_past = None
         self.thresh = 4e-6
         self.ori_data = None
         self.seq_starts = None
+        self.split = split(self.seq_len)
         return
 
     def fit(self, X, y=None):
@@ -485,7 +488,8 @@ class BaseDeepAD(metaclass=ABCMeta):
                     all_g = torch.cat(g_loss)
                     metric = torch.abs(all_g * all_v)
                     nonzero_ratio = 0.6
-                    nz = int(nonzero_ratio * metric.size())
+                    num_params = metric.size(0)
+                    nz = int(nonzero_ratio * num_params)
                     top_values, _ = torch.topk(metric, nz)
                     self.thresh = top_values[-1]
 
@@ -507,6 +511,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
             # save_num = int(self.save_rate * len(self.train_data))
             index = num_key_params.argsort()[::-1][:save_num]       # 降序，保留多的save_num个
+            # index = num_key_params.argsort()[:save_num]             # 升序，保留少的save_num个
             self.train_data = self.train_data[np.sort(index)]
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                       shuffle=True, pin_memory=True)
@@ -525,6 +530,18 @@ class BaseDeepAD(metaclass=ABCMeta):
                 loss = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
                 losses = torch.mean(loss, 1)
 
+                if ii == 0:
+                    loss = losses[0]
+                    g_loss = grad(loss, params, create_graph=True)
+                    g_loss = [g.view(-1) for g in g_loss]
+                    all_g = torch.cat(g_loss)
+                    metric = torch.abs(all_g * all_v)
+                    nonzero_ratio = 0.6
+                    num_params = metric.size(0)
+                    nz = int(nonzero_ratio * num_params)
+                    top_values, _ = torch.topk(metric, nz)
+                    self.thresh = top_values[-1]
+
                 for loss in losses:
                     # 有提速空间 #
                     g_loss = grad(loss, params, create_graph=True)
@@ -540,14 +557,26 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.net.train()
 
             # 待修改，根据重要参数，调整波动
-            save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples * 0.3))
+            add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.3))        # 每次添加的数据量
             # save_num = int(self.save_rate * len(self.train_data))
-            index = num_key_params.argsort()[::-1][:save_num]  # 重要参数
+            index = num_key_params.argsort()[::-1][:add_num]  # 重要参数最多的20%的
+            index = np.sort(index)
+            imp_seq_starts = self.seq_starts[index]
+            for imp_seq_start in imp_seq_starts:
+                if imp_seq_start-self.split[0] >= 0:
+                    self.seq_starts.append(imp_seq_start-self.split[0])
+                if imp_seq_start+self.split[1] <= self.n_samples:
+                    self.seq_starts.append(imp_seq_start+self.split[1])
+                if imp_seq_start-self.split[1] >= 0:
+                    self.seq_starts.append(imp_seq_start-self.split[1])
+                if imp_seq_start+self.split[0] <= self.n_samples:
+                    self.seq_starts.append(imp_seq_start+self.split[0])
 
+            self.seq_starts = np.sort(self.seq_starts)
+            self.seq_starts = np.unique(self.seq_starts, axis=0)
             self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                            shuffle=True, pin_memory=True)
-
 
         else:
             print('ERROR')

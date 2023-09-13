@@ -45,7 +45,7 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=3)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=4)      # 0：不划窗，1：min划窗
 
 args = parser.parse_args()
 

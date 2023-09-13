@@ -101,12 +101,12 @@ class TcnED(BaseDeepAD):
         t1 = time.time()
         total_loss = 0
         cnt = 0
+        self.net.zero_grad()
         for batch_x in self.train_loader:
             loss = self.training_forward(batch_x, self.net, self.criterion)
-            self.net.zero_grad()
             loss.backward()
             self.optimizer.step()
-
+            self.net.zero_grad()
             total_loss += loss.item()
             cnt += 1
 
