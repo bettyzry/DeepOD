@@ -38,7 +38,7 @@ class AnomalyTransformer(BaseDeepAD):
             device=self.device
         ).to(self.device)
 
-        dataloader = DataLoader(train_seqs, batch_size=self.batch_size,
+        self.train_loader = DataLoader(train_seqs, batch_size=self.batch_size,
                                 shuffle=True, pin_memory=True)
 
         self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
@@ -47,7 +47,8 @@ class AnomalyTransformer(BaseDeepAD):
         self.net.train()
         for e in range(self.epochs):
             t1 = time.time()
-            loss = self.training(dataloader)
+            loss = self.training()
+            self.do_sample_selection()
 
             if self.verbose >= 1 and (e == 0 or (e + 1) % self.prt_steps == 0):
                 print(f'epoch{e + 1:3d}, '
@@ -72,13 +73,12 @@ class AnomalyTransformer(BaseDeepAD):
 
         return loss_final_pad
 
-    def training(self, dataloader):
+    def training(self):
         criterion = nn.MSELoss()
         loss_list = []
 
-        for ii, batch_x in enumerate(dataloader):
-            self.optimizer.zero_grad()
-
+        self.optimizer.zero_grad()
+        for ii, batch_x in enumerate(self.train_loader):
             input = batch_x.float().to(self.device)
             output, series, prior, _ = self.net(input)
 
@@ -112,6 +112,7 @@ class AnomalyTransformer(BaseDeepAD):
             loss1.backward(retain_graph=True)
             loss2.backward()
             self.optimizer.step()
+            self.optimizer.zero_grad()
 
             if self.epoch_steps != -1:
                 if ii > self.epoch_steps:
@@ -167,8 +168,35 @@ class AnomalyTransformer(BaseDeepAD):
         return
 
     def inference_forward(self, batch_x, net, criterion):
-        """define forward step in inference"""
-        return
+        criterion = nn.MSELoss(reduction='none')
+        temperature = 50
+        input = batch_x.float().to(self.device)
+        output, series, prior, _ = self.net(input)
+
+        loss = torch.mean(criterion(input, output), dim=-1)
+        series_loss = 0.0
+        prior_loss = 0.0
+        for u in range(len(prior)):
+            if u == 0:
+                series_loss = my_kl_loss(series[u], (
+                        prior[u] / torch.unsqueeze(torch.sum(prior[u], dim=-1), dim=-1).repeat(1, 1, 1,
+                                                                                               self.seq_len)).detach()) * temperature
+                prior_loss = my_kl_loss(
+                    (prior[u] / torch.unsqueeze(torch.sum(prior[u], dim=-1), dim=-1).repeat(1, 1, 1,
+                                                                                            self.seq_len)),
+                    series[u].detach()) * temperature
+            else:
+                series_loss += my_kl_loss(series[u], (
+                        prior[u] / torch.unsqueeze(torch.sum(prior[u], dim=-1), dim=-1).repeat(1, 1, 1,
+                                                                                               self.seq_len)).detach()) * temperature
+                prior_loss += my_kl_loss(
+                    (prior[u] / torch.unsqueeze(torch.sum(prior[u], dim=-1), dim=-1).repeat(1, 1, 1,
+                                                                                            self.seq_len)),
+                    series[u].detach()) * temperature
+        metric = torch.softmax((-series_loss - prior_loss), dim=-1)
+        cri = metric * loss
+        loss_final = cri.mean(axis=1)
+        return output, loss_final
 
     def training_prepare(self, X, y):
         """define train_loader, net, and criterion"""
