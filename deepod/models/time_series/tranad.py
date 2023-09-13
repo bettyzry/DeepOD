@@ -19,7 +19,7 @@ class TranAD(BaseDeepAD):
             epoch_steps=epoch_steps, prt_steps=prt_steps, device=device,
             verbose=verbose, random_state=random_state
         )
-        self.model = None
+        self.net = None
         self.optimizer = None
         self.scheduler = None
 
@@ -31,7 +31,7 @@ class TranAD(BaseDeepAD):
         self.n_features = X.shape[1]
 
         train_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
-        self.model = TranADNet(
+        self.net = TranADNet(
             feats=self.n_features,
             n_window=self.seq_len
         ).to(self.device)
@@ -39,10 +39,10 @@ class TranAD(BaseDeepAD):
         dataloader = DataLoader(train_seqs, batch_size=self.batch_size,
                                 shuffle=True, pin_memory=True)
 
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=1e-5)
+        self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
 
-        self.model.train()
+        self.net.train()
         for e in range(self.epochs):
             loss = self.training(dataloader, epoch=e)
             print(f'Epoch {e+1},\t L1 = {loss}')
@@ -56,7 +56,7 @@ class TranAD(BaseDeepAD):
         dataloader = DataLoader(seqs, batch_size=self.batch_size,
                                 shuffle=False, drop_last=False)
 
-        self.model.eval()
+        self.net.eval()
         loss, _ = self.inference(dataloader)  # (n,d)
         loss_final = np.mean(loss, axis=1)  # (n,)
 
@@ -72,6 +72,7 @@ class TranAD(BaseDeepAD):
         n = epoch + 1
         l1s, l2s = [], []
 
+        self.optimizer.zero_grad()
         for ii, batch_x in enumerate(dataloader):
             local_bs = batch_x.shape[0]  #(128，30，19)
             window = batch_x.permute(1, 0, 2)  # (30, 128, 19)
@@ -80,15 +81,36 @@ class TranAD(BaseDeepAD):
             window = window.float().to(self.device)
             elem = elem.float().to(self.device)
 
-            z = self.model(window, elem)
+            z = self.net(window, elem)
             l1 = (1/n) * criterion(z[0], elem) + (1-1/n) * criterion(z[1], elem)  #(1, 128, 19)
 
             l1s.append(torch.mean(l1).item())
             loss = torch.mean(l1)
-            self.optimizer.zero_grad()
 
             loss.backward(retain_graph=True)
+
+            if self.sample_selection == 5:  # ICML21
+                to_concat_g = []
+                to_concat_v = []
+                clip = 0.2
+                for name, param in self.net.named_parameters():
+                    to_concat_g.append(param.grad.data.view(-1))
+                    to_concat_v.append(param.data.view(-1))
+                all_g = torch.cat(to_concat_g)
+                all_v = torch.cat(to_concat_v)
+                metric = torch.abs(all_g * all_v)
+                num_params = all_v.size(0)
+                nz = int(clip * num_params)
+                top_values, _ = torch.topk(metric, nz)
+                thresh = top_values[-1]
+
+                for name, param in self.net.named_parameters():
+                    mask = (torch.abs(param.data * param.grad.data) >= thresh).type(torch.cuda.FloatTensor)
+                    mask = mask * clip
+                    param.grad.data = mask * param.grad.data
+
             self.optimizer.step()
+            self.optimizer.zero_grad()
 
             if self.epoch_steps != -1:
                 if ii > self.epoch_steps:
@@ -109,7 +131,7 @@ class TranAD(BaseDeepAD):
             elem = window[-1, :, :].view(1, local_bs, self.n_features)
             window = window.float().to(self.device)
             elem = elem.float().to(self.device)
-            z = self.model(window, elem)
+            z = self.net(window, elem)
             if isinstance(z, tuple):
                 z = z[1]
             l1 = criterion(z, elem)[0]
@@ -125,8 +147,18 @@ class TranAD(BaseDeepAD):
         return
 
     def inference_forward(self, batch_x, net, criterion):
-        """define forward step in inference"""
-        return
+        criterion = nn.MSELoss(reduction='none')
+        local_bs = batch_x.shape[0]
+        window = batch_x.permute(1, 0, 2)
+        elem = window[-1, :, :].view(1, local_bs, self.n_features)
+        window = window.float().to(self.device)
+        elem = elem.float().to(self.device)
+        z = self.net(window, elem)
+        if isinstance(z, tuple):
+            z = z[1]
+        l1 = criterion(z, elem)[0]
+        l1 = l1.mean(axis=1)
+        return z, l1
 
     def training_prepare(self, X, y):
         """define train_loader, net, and criterion"""
