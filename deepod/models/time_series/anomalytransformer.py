@@ -50,10 +50,9 @@ class AnomalyTransformer(BaseDeepAD):
             loss = self.training()
             self.do_sample_selection()
 
-            if self.verbose >= 1 and (e == 0 or (e + 1) % self.prt_steps == 0):
-                print(f'epoch{e + 1:3d}, '
-                      f'training loss: {loss:.6f}, '
-                      f'time: {time.time() - t1:.1f}s')
+            print(f'epoch{e + 1:3d}, '
+                  f'training loss: {loss:.6f}, '
+                  f'time: {time.time() - t1:.1f}s')
         self.decision_scores_ = self.decision_function(X)
         self.labels_ = self._process_decision_scores()  # in base model
         return
@@ -68,7 +67,7 @@ class AnomalyTransformer(BaseDeepAD):
         loss_final = np.mean(loss, axis=1)  # (n,)
 
         padding_list = np.zeros([X.shape[0] - loss.shape[0], loss.shape[1]])
-        loss_pad = np.concatenate([padding_list, loss], axis=0)
+        # loss_pad = np.concatenate([padding_list, loss], axis=0)
         loss_final_pad = np.hstack([0 * np.ones(X.shape[0] - loss_final.shape[0]), loss_final])
 
         return loss_final_pad
