@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-One-class classification
+One-class classification    # 半监督
 this is partially adapted from https://github.com/lukasruff/Deep-SAD-PyTorch (MIT license)
 @Author: Hongzuo Xu <hongzuoxu@126.com, xuhongzuo13@nudt.edu.cn>
 """

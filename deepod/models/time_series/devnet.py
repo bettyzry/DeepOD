@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Deep anomaly detection with deviation networks.
+Deep anomaly detection with deviation networks. 弱监督
 PyTorch's implementation
 @Author: Hongzuo Xu <hongzuoxu@126.com, xuhongzuo13@nudt.edu.cn>
 """
