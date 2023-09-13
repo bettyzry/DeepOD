@@ -45,7 +45,7 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=5)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=6)      # 0：不划窗，1：min划窗
 
 args = parser.parse_args()
 
@@ -72,7 +72,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     result_file = os.path.join(args.output_dir, f'{args.model}.{args.flag}.csv')
     # # setting loss file/folder path
-    funcs = ['norm', 'delta-min', 'abs-min', 'imp_param', "imp_param_adding", 'ICLM21']
+    funcs = ['norm', 'delta-min', 'abs-min', 'imp_param', "imp_param_adding", 'ICLM21', 'delta+abs-min']
     loss_dir = f'{args.loss_dir}/{args.model}.{args.flag}/'
     os.makedirs(loss_dir, exist_ok=True)
     key_params_num_dir = f'{args.key_params_num_dir}/{args.model}.{args.flag}/'
@@ -155,7 +155,7 @@ def main():
                    avg_entry[0], std_entry[0], avg_entry[1], std_entry[1],
                    avg_entry[2], std_entry[2], avg_entry[3], std_entry[3],
                    avg_entry[4], std_entry[4],
-                   np.average(t_lst), args.model+'-'+str(args.sample_selection))
+                   np.average(t_lst), args.model+'-'+funcs[args.sample_selection])
             print(txt)
             print(txt, file=f)
             f.close()

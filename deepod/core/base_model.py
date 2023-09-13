@@ -591,5 +591,38 @@ class BaseDeepAD(metaclass=ABCMeta):
                                            shuffle=True, pin_memory=True)
         elif self.sample_selection == 5:
             pass
+
+        elif self.sample_selection == 6:
+            if len(self.train_data) <= int(self.n_samples*0.3):
+                return
+
+            # 计算损失值
+            self.net.eval()                     # 使用完全的网络来计算
+            train_loss_now = np.array([])
+            for batch_x in self.train_loader:
+                _, error = self.inference_forward(batch_x, self.net, self.criterion)
+                train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
+            self.loss_by_epoch.append(train_loss_now)
+            self.net.train()  # 使用完全的网络来计算
+            self.train_loss_now = train_loss_now
+
+            if self.train_loss_past is None:    # 第一轮迭代，直接返回
+                self.train_loss_past = self.train_loss_now
+                return
+
+            save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
+            # save_num = int(self.save_rate * len(self.train_data))
+            delta = abs(self.train_loss_now - self.train_loss_past)
+            index1 = delta.argsort()[:save_num]
+            index2 = train_loss_now.argsort()[:save_num]
+
+            index = np.concatenate([index1, index2])
+            index = np.sort(index)
+            index = np.unique(index, axis=0)
+
+            self.train_data = self.train_data[np.sort(index)]
+            self.train_loss_past = self.train_loss_now[np.sort(index)]
+            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
+                                      shuffle=True, pin_memory=True)
         else:
             print('ERROR')
