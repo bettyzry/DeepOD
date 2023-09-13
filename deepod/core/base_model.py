@@ -624,5 +624,79 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.train_loss_past = self.train_loss_now[np.sort(index)]
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                       shuffle=True, pin_memory=True)
+
+        elif self.sample_selection == 7:        # 我的方法
+            if len(self.train_data) >= int(self.n_samples // self.seq_len * 2):
+                return
+
+            self.net.eval()
+            params = [p for p in self.net.parameters() if p.requires_grad]
+            all_v = torch.cat([param.data.view(-1) for param in params])
+            key_params = []
+            for ii, batch_x in enumerate(self.train_loader):
+                batch_x = batch_x.float().to(self.device)
+                output, _ = self.net(batch_x)
+                loss = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
+                losses = torch.mean(loss, 1)
+
+                if ii == 0:
+                    loss = losses[0]
+                    g_loss = grad(loss, params, create_graph=True)
+                    g_loss = [g.view(-1) for g in g_loss]
+                    all_g = torch.cat(g_loss)
+                    metric = torch.abs(all_g * all_v)
+                    nonzero_ratio = 0.3
+                    num_params = metric.size(0)
+                    nz = int(nonzero_ratio * num_params)
+                    top_values, _ = torch.topk(metric, nz)
+                    self.thresh = top_values[-1]
+
+                for loss in losses:
+                    # 有提速空间 #
+                    g_loss = grad(loss, params, create_graph=True)
+                    g_loss = [g.view(-1) for g in g_loss]
+                    all_g = torch.cat(g_loss)
+                    # 有提速空间 #
+                    metric = torch.abs(all_g * all_v)
+                    key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
+                    key_param = key_param.cpu().detach().numpy()
+                    key_params.append(key_param)
+                    # key_param_index = [ii for ii, k in enumerate(key_param) if k == 1]        # 关键参数
+                    # key_param_matrix.append(key_param_index)
+            self.net.train()
+
+            # 聚类key_param_matrix
+            importance = np.sum(key_params, axis=0)     # 按列求和
+            param_num = importance.shape[0]
+            # key_param_index = np.sort(importance.argsort()[::-1][:int(param_num*0.3)])
+            threshold = param_num*0.3       # 超过30%的数据都认为该参数为重要参数
+            true_key_param = [1 if i >= threshold else 0 for i in importance]
+
+            from sklearn.metrics import f1_score
+            f1 = np.zeros(len(self.train_data))
+            for ii, key_param in enumerate(key_params):
+                f1[ii] = f1_score(true_key_param, key_param)
+
+            # 待修改，根据重要参数，调整波动
+            add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.3))        # 每次添加的数据量
+            index = f1.argsort()[::-1][:add_num]  # 扩展重要参数含量最多的20%
+            index = np.sort(index)
+            imp_seq_starts = self.seq_starts[index]
+            for imp_seq_start in imp_seq_starts:
+                if imp_seq_start-self.split[0] >= 0:
+                    self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[0])
+                if imp_seq_start+self.split[1] <= self.n_samples - self.seq_len + 1:
+                    self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[1])
+                if imp_seq_start-self.split[1] >= 0:
+                    self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[1])
+                if imp_seq_start+self.split[0] <= self.n_samples - self.seq_len + 1:
+                    self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[0])
+
+            self.seq_starts = np.sort(self.seq_starts)
+            self.seq_starts = np.unique(self.seq_starts, axis=0)
+            self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
+            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
+                                           shuffle=True, pin_memory=True)
+
         else:
             print('ERROR')
