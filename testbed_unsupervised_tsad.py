@@ -110,6 +110,9 @@ def main():
             entries = []
             t_lst = []
             for i in range(args.runs):
+
+
+
                 start_time = time.time()
                 print(f'\nRunning [{i+1}/{args.runs}] of [{args.model}] on Dataset [{dataset_name}]')
 

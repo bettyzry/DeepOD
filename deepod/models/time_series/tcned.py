@@ -51,7 +51,7 @@ class TcnED(BaseDeepAD):
             Fitted estimator.
         """
         if self.data_type == 'ts':
-            if self.sample_selection == 4:
+            if self.sample_selection == 4 or self.sample_selection == 7:
                 self.ori_data = X
                 self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)     # 无重叠计算seq
                 X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
@@ -88,13 +88,6 @@ class TcnED(BaseDeepAD):
             for epoch in range(self.epochs):
                 self.training(epoch)
                 self.do_sample_selection()
-
-        # if self.verbose >= 1:
-        #     print('Start Inference on the training data...')
-
-        # self.decision_scores_ = self.decision_function(X)
-        # self.labels_ = self._process_decision_scores()
-
         return self
 
     def training(self, epoch):
