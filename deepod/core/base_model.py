@@ -478,6 +478,17 @@ class BaseDeepAD(metaclass=ABCMeta):
                 loss = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
                 losses = torch.mean(loss, 1)
 
+                if ii == 0:
+                    loss = losses[0]
+                    g_loss = grad(loss, params, create_graph=True)
+                    g_loss = [g.view(-1) for g in g_loss]
+                    all_g = torch.cat(g_loss)
+                    metric = torch.abs(all_g * all_v)
+                    nonzero_ratio = 0.6
+                    nz = int(nonzero_ratio * metric.size())
+                    top_values, _ = torch.topk(metric, nz)
+                    self.thresh = top_values[-1]
+
                 for loss in losses:
                     # 有提速空间 #
                     g_loss = grad(loss, params, create_graph=True)
@@ -490,16 +501,15 @@ class BaseDeepAD(metaclass=ABCMeta):
                     num_key_params.append(num_key_param.item())
                 # num_key_params = np.concatenate([num_key_params, num_key_param.cpu().detach().numpy()])
             self.key_params_num_by_epoch.append(num_key_params)
-            num_key_params = np.array(num_key_params)
             self.net.train()
 
+            num_key_params = np.array(num_key_params)
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
             # save_num = int(self.save_rate * len(self.train_data))
             index = num_key_params.argsort()[::-1][:save_num]       # 降序，保留多的save_num个
             self.train_data = self.train_data[np.sort(index)]
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                       shuffle=True, pin_memory=True)
-
 
         elif self.sample_selection == 4:        # 增量方法
             if len(self.train_data) >= int(self.n_samples // self.batch_size * 2):

@@ -23,7 +23,7 @@ def main():
     # watch = zdf[index, 0]
     # print(watch)
 
-    loss = zdf[2]
+    loss = zdf[0]
     res_freq = stats.relfreq(loss, numbins=50)  # numbins 是统计一次的间隔(步长)是多大
     pdf_value = res_freq.frequency
     x = res_freq.lowerlimit + np.linspace(0, res_freq.binsize * res_freq.frequency.size, res_freq.frequency.size)
@@ -34,5 +34,5 @@ def main():
 
 
 if __name__ == '__main__':
-    data_root = '/home/xuhz/zry/DeepOD-new/@losses/TcnED./SWaT_cut_min0.csv'
+    data_root = '/home/xuhz/zry/DeepOD-new/@key_params_num/TcnED./ASD_combined_imp_param0.csv'
     main()
