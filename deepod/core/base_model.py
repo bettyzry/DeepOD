@@ -148,7 +148,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.key_params_num_by_epoch = []
         self.sample_selection = sample_selection
         self.save_rate = 0.8
-        self.add_rate = 0.2
+        self.add_rate = 0.1
         self.train_loss_now = None
         self.train_loss_past = None
         self.thresh = 4e-6
@@ -450,6 +450,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                 train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
             self.loss_by_epoch.append(train_loss_now)
             self.net.train()  # 使用完全的网络来计算
+            self.train_loss_now = train_loss_now
 
             if self.train_loss_past is None:    # 第一轮迭代，直接返回
                 self.train_loss_past = self.train_loss_now
@@ -457,7 +458,7 @@ class BaseDeepAD(metaclass=ABCMeta):
 
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
             # save_num = int(self.save_rate * len(self.train_data))
-            delta = self.train_loss_now - self.train_loss_past
+            delta = abs(self.train_loss_now - self.train_loss_past)
             index = delta.argsort()[:save_num]
             self.train_data = self.train_data[np.sort(index)]
             self.train_loss_past = self.train_loss_now[np.sort(index)]
@@ -465,7 +466,25 @@ class BaseDeepAD(metaclass=ABCMeta):
                                       shuffle=True, pin_memory=True)
 
         elif self.sample_selection == 2:        # 按概率密度
-            res_freq = stats.relfreq(self.train_loss_now, numbins=50)  # numbins 是统计一次的间隔(步长)是多大
+            if len(self.train_data) <= int(self.n_samples * 0.3):
+                return
+
+            # 计算损失值
+            self.net.eval()  # 使用完全的网络来计算
+            train_loss_now = np.array([])
+            for batch_x in self.train_loader:
+                _, error = self.inference_forward(batch_x, self.net, self.criterion)
+                train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
+            self.loss_by_epoch.append(train_loss_now)
+            self.net.train()  # 使用完全的网络来计算
+            self.train_loss_now = train_loss_now
+
+            save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples * 0.3))
+            # save_num = int(self.save_rate * len(self.train_data))
+            index = self.train_loss_now.argsort()[:save_num]
+            self.train_data = self.train_data[np.sort(index)]
+            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
+                                           shuffle=True, pin_memory=True)
 
         elif self.sample_selection == 3:        # 保留重要参数多的数据，待提速
             if len(self.train_data) <= int(self.n_samples*0.3):
@@ -510,14 +529,14 @@ class BaseDeepAD(metaclass=ABCMeta):
             num_key_params = np.array(num_key_params)
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
             # save_num = int(self.save_rate * len(self.train_data))
-            index = num_key_params.argsort()[::-1][:save_num]       # 降序，保留多的save_num个
-            # index = num_key_params.argsort()[:save_num]             # 升序，保留少的save_num个
+            # index = num_key_params.argsort()[::-1][:save_num]       # 降序，保留多的save_num个
+            index = num_key_params.argsort()[:save_num]             # 升序，保留少的save_num个
             self.train_data = self.train_data[np.sort(index)]
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                       shuffle=True, pin_memory=True)
 
         elif self.sample_selection == 4:        # 增量方法
-            if len(self.train_data) >= int(self.n_samples // self.batch_size * 2):
+            if len(self.train_data) >= int(self.n_samples // self.seq_len * 2):
                 return
 
             self.net.eval()
@@ -554,23 +573,24 @@ class BaseDeepAD(metaclass=ABCMeta):
                     num_key_params.append(num_key_param.item())
                 # num_key_params = np.concatenate([num_key_params, num_key_param.cpu().detach().numpy()])
             num_key_params = np.array(num_key_params)
+            self.key_params_num_by_epoch.append(num_key_params)
             self.net.train()
 
             # 待修改，根据重要参数，调整波动
             add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.3))        # 每次添加的数据量
-            # save_num = int(self.save_rate * len(self.train_data))
-            index = num_key_params.argsort()[::-1][:add_num]  # 重要参数最多的20%的
+            # index = num_key_params.argsort()[::-1][:add_num]  # 重要参数最多的20%的
+            index = num_key_params.argsort()[:add_num]  # 重要参数最少的20%的
             index = np.sort(index)
             imp_seq_starts = self.seq_starts[index]
             for imp_seq_start in imp_seq_starts:
                 if imp_seq_start-self.split[0] >= 0:
-                    self.seq_starts.append(imp_seq_start-self.split[0])
-                if imp_seq_start+self.split[1] <= self.n_samples:
-                    self.seq_starts.append(imp_seq_start+self.split[1])
+                    self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[0])
+                if imp_seq_start+self.split[1] <= self.n_samples - self.seq_len + 1:
+                    self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[1])
                 if imp_seq_start-self.split[1] >= 0:
-                    self.seq_starts.append(imp_seq_start-self.split[1])
-                if imp_seq_start+self.split[0] <= self.n_samples:
-                    self.seq_starts.append(imp_seq_start+self.split[0])
+                    self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[1])
+                if imp_seq_start+self.split[0] <= self.n_samples - self.seq_len + 1:
+                    self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[0])
 
             self.seq_starts = np.sort(self.seq_starts)
             self.seq_starts = np.unique(self.seq_starts, axis=0)

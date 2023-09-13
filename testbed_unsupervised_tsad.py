@@ -45,7 +45,7 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=4)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
 
 args = parser.parse_args()
 
@@ -71,7 +71,7 @@ cur_time = time.strftime("%m-%d %H.%M.%S", time.localtime())
 os.makedirs(args.output_dir, exist_ok=True)
 result_file = os.path.join(args.output_dir, f'{args.model}.{args.flag}.csv')
 # # setting loss file/folder path
-funcs = ['norm', 'min', 'distribution', 'imp_param', "imp_param_adding"]
+funcs = ['norm', 'delta-min', 'abs-min', 'imp_param', "imp_param_adding"]
 loss_dir = f'{args.loss_dir}/{args.model}.{args.flag}/'
 os.makedirs(loss_dir, exist_ok=True)
 key_params_num_dir = f'{args.key_params_num_dir}/{args.model}.{args.flag}/'
