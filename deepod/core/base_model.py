@@ -446,8 +446,8 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.net.eval()                     # 使用完全的网络来计算
             train_loss_now = np.array([])
             for batch_x in self.train_loader:
-                _, error = self.inference_forward(batch_x, self.net, self.criterion)
-                train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
+                _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+                train_loss_now = np.concatenate([train_loss_now, losses.cpu().detach().numpy()])
             self.loss_by_epoch.append(train_loss_now)
             self.net.train()  # 使用完全的网络来计算
             self.train_loss_now = train_loss_now
@@ -473,8 +473,8 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.net.eval()  # 使用完全的网络来计算
             train_loss_now = np.array([])
             for batch_x in self.train_loader:
-                _, error = self.inference_forward(batch_x, self.net, self.criterion)
-                train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
+                _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+                train_loss_now = np.concatenate([train_loss_now, losses.cpu().detach().numpy()])
             self.loss_by_epoch.append(train_loss_now)
             self.net.train()  # 使用完全的网络来计算
 
@@ -537,10 +537,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             num_key_params = []
             all_v = torch.cat([param.data.view(-1) for param in params])
             for ii, batch_x in enumerate(self.train_loader):
-                batch_x = batch_x.float().to(self.device)
-                output, _ = self.net(batch_x)
-                loss = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
-                losses = torch.mean(loss, 1)
+                _, losses = self.inference_forward(batch_x, self.net, self.criterion)
 
                 if ii == 0:
                     loss = losses[0]
@@ -634,10 +631,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             all_v = torch.cat([param.data.view(-1) for param in params])
             key_params = []
             for ii, batch_x in enumerate(self.train_loader):
-                batch_x = batch_x.float().to(self.device)
-                output, _ = self.net(batch_x)
-                loss = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
-                losses = torch.mean(loss, 1)
+                _, losses = self.inference_forward(batch_x, self.net, self.criterion)
 
                 if ii == 0:
                     loss = losses[0]
