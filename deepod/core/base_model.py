@@ -465,7 +465,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                       shuffle=True, pin_memory=True)
 
-        elif self.sample_selection == 2:        # 按概率密度
+        elif self.sample_selection == 2:        # 保留绝对值最小的80%
             if len(self.train_data) <= int(self.n_samples * 0.3):
                 return
 
@@ -477,11 +477,10 @@ class BaseDeepAD(metaclass=ABCMeta):
                 train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
             self.loss_by_epoch.append(train_loss_now)
             self.net.train()  # 使用完全的网络来计算
-            self.train_loss_now = train_loss_now
 
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples * 0.3))
             # save_num = int(self.save_rate * len(self.train_data))
-            index = self.train_loss_now.argsort()[:save_num]
+            index = train_loss_now.argsort()[:save_num]
             self.train_data = self.train_data[np.sort(index)]
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                            shuffle=True, pin_memory=True)
@@ -495,10 +494,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             num_key_params = []
             all_v = torch.cat([param.data.view(-1) for param in params])
             for ii, batch_x in enumerate(self.train_loader):
-                batch_x = batch_x.float().to(self.device)
-                output, _ = self.net(batch_x)
-                loss = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
-                losses = torch.mean(loss, 1)
+                _, losses = self.inference_forward(batch_x, self.net, self.criterion)
 
                 if ii == 0:
                     loss = losses[0]
@@ -506,18 +502,16 @@ class BaseDeepAD(metaclass=ABCMeta):
                     g_loss = [g.view(-1) for g in g_loss]
                     all_g = torch.cat(g_loss)
                     metric = torch.abs(all_g * all_v)
-                    nonzero_ratio = 0.6
+                    nonzero_ratio = 0.3
                     num_params = metric.size(0)
                     nz = int(nonzero_ratio * num_params)
                     top_values, _ = torch.topk(metric, nz)
                     self.thresh = top_values[-1]
 
                 for loss in losses:
-                    # 有提速空间 #
                     g_loss = grad(loss, params, create_graph=True)
                     g_loss = [g.view(-1) for g in g_loss]
                     all_g = torch.cat(g_loss)
-                    # 有提速空间 #
                     metric = torch.abs(all_g * all_v)
                     key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
                     num_key_param = torch.sum(key_param)
@@ -529,8 +523,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             num_key_params = np.array(num_key_params)
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
             # save_num = int(self.save_rate * len(self.train_data))
-            # index = num_key_params.argsort()[::-1][:save_num]       # 降序，保留多的save_num个
-            index = num_key_params.argsort()[:save_num]             # 升序，保留少的save_num个
+            index = num_key_params.argsort()[::-1][:save_num]       # 降序，保留多的save_num个
             self.train_data = self.train_data[np.sort(index)]
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                       shuffle=True, pin_memory=True)
@@ -578,8 +571,7 @@ class BaseDeepAD(metaclass=ABCMeta):
 
             # 待修改，根据重要参数，调整波动
             add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.3))        # 每次添加的数据量
-            # index = num_key_params.argsort()[::-1][:add_num]  # 重要参数最多的20%的
-            index = num_key_params.argsort()[:add_num]  # 重要参数最少的20%的
+            index = num_key_params.argsort()[::-1][:add_num]  # 重要参数最多的20%的
             index = np.sort(index)
             imp_seq_starts = self.seq_starts[index]
             for imp_seq_start in imp_seq_starts:
@@ -597,6 +589,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                            shuffle=True, pin_memory=True)
-
+        elif self.sample_selection == 5:
+            pass
         else:
             print('ERROR')

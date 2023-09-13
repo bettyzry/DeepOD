@@ -105,6 +105,26 @@ class TcnED(BaseDeepAD):
         for batch_x in self.train_loader:
             loss = self.training_forward(batch_x, self.net, self.criterion)
             loss.backward()
+            if self.sample_selection == 5:      # ICML21
+                to_concat_g = []
+                to_concat_v = []
+                clip = 0.2
+                for name, param in self.net.named_parameters():
+                    to_concat_g.append(param.grad.data.view(-1))
+                    to_concat_v.append(param.data.view(-1))
+                all_g = torch.cat(to_concat_g)
+                all_v = torch.cat(to_concat_v)
+                metric = torch.abs(all_g * all_v)
+                num_params = all_v.size(0)
+                nz = int(clip * num_params)
+                top_values, _ = torch.topk(metric, nz)
+                thresh = top_values[-1]
+
+                for name, param in self.net.named_parameters():
+                    mask = (torch.abs(param.data * param.grad.data) >= thresh).type(torch.cuda.FloatTensor)
+                    mask = mask * clip
+                    param.grad.data = mask * param.grad.data
+
             self.optimizer.step()
             self.net.zero_grad()
             total_loss += loss.item()
