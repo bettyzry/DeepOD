@@ -29,9 +29,16 @@ class TimesNet(BaseDeepAD):
         self.num_kernels = num_kernels
 
     def fit(self, X, y=None):
-        self.n_features = X.shape[1]
-
-        train_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+        if self.sample_selection == 4 or self.sample_selection == 7:
+            self.ori_data = X
+            self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
+            X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
+            self.train_data = X_seqs
+            self.n_samples, self.n_features = X.shape
+        else:
+            X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+            self.train_data = X_seqs
+            self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
 
         self.net = TimesNetModel(
             seq_len=self.seq_len,
@@ -46,7 +53,7 @@ class TimesNet(BaseDeepAD):
             num_kernels=self.num_kernels
         ).to(self.device)
 
-        dataloader = DataLoader(train_seqs, batch_size=self.batch_size,
+        self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
                                 shuffle=True, pin_memory=True)
 
         self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
@@ -55,14 +62,15 @@ class TimesNet(BaseDeepAD):
         self.net.train()
         for e in range(self.epochs):
             t1 = time.time()
-            loss = self.training(dataloader)
+            loss = self.training()
+            self.do_sample_selection()
 
-            if self.verbose >= 1 and (e == 0 or (e + 1) % self.prt_steps == 0):
-                print(f'epoch{e + 1:3d}, '
-                      f'training loss: {loss:.6f}, '
-                      f'time: {time.time() - t1:.1f}s')
-        self.decision_scores_ = self.decision_function(X)
-        self.labels_ = self._process_decision_scores()  # in base model
+            print(f'epoch{e + 1:3d}, '
+                  f'training loss: {loss:.6f}, '
+                  f'time: {time.time() - t1:.1f}s')
+
+        # self.decision_scores_ = self.decision_function(X)
+        # self.labels_ = self._process_decision_scores()  # in base model
         return
 
     def decision_function(self, X, return_rep=False):
@@ -80,20 +88,41 @@ class TimesNet(BaseDeepAD):
 
         return loss_final_pad
 
-    def training(self, dataloader):
+    def training(self):
         criterion = nn.MSELoss()
         train_loss = []
 
-        for ii, batch_x in enumerate(dataloader):
-            self.optimizer.zero_grad()
+        self.optimizer.zero_grad()
+        for ii, batch_x in enumerate(self.train_loader):
 
             batch_x = batch_x.float().to(self.device)  # (bs, seq_len, dim)
             outputs = self.net(batch_x)  # (bs, seq_len, dim)
             loss = criterion(outputs[:, -1:, :], batch_x[:, -1:, :])
             train_loss.append(loss.item())
-
             loss.backward()
+
+            if self.sample_selection == 5:      # ICML21
+                to_concat_g = []
+                to_concat_v = []
+                clip = 0.2
+                for name, param in self.net.named_parameters():
+                    to_concat_g.append(param.grad.data.view(-1))
+                    to_concat_v.append(param.data.view(-1))
+                all_g = torch.cat(to_concat_g)
+                all_v = torch.cat(to_concat_v)
+                metric = torch.abs(all_g * all_v)
+                num_params = all_v.size(0)
+                nz = int(clip * num_params)
+                top_values, _ = torch.topk(metric, nz)
+                thresh = top_values[-1]
+
+                for name, param in self.net.named_parameters():
+                    mask = (torch.abs(param.data * param.grad.data) >= thresh).type(torch.cuda.FloatTensor)
+                    mask = mask * clip
+                    param.grad.data = mask * param.grad.data
+
             self.optimizer.step()
+            self.optimizer.zero_grad()
 
             if self.epoch_steps != -1:
                 if ii > self.epoch_steps:
@@ -127,8 +156,11 @@ class TimesNet(BaseDeepAD):
         return
 
     def inference_forward(self, batch_x, net, criterion):
-        """define forward step in inference"""
-        return
+        batch_x = batch_x.float().to(self.device)
+        output, _ = net(batch_x)
+        error = torch.nn.MSELoss(reduction='none')(output[:, -1:, :], batch_x[:, -1:, :])
+        error = error.mean(axis=1)
+        return output, error
 
     def training_prepare(self, X, y):
         """define train_loader, net, and criterion"""
