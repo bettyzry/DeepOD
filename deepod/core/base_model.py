@@ -492,16 +492,15 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.net.eval()
             params = [p for p in self.net.parameters() if p.requires_grad]
             num_key_params = []
-            all_v = torch.cat([param.data.view(-1) for param in params])
+            all_v = [param.data.view(-1) for param in params]
             for ii, batch_x in enumerate(self.train_loader):
                 _, losses = self.inference_forward(batch_x, self.net, self.criterion)
 
                 if ii == 0:
                     loss = losses[0]
-                    g_loss = grad(loss, params, create_graph=True)
-                    g_loss = [g.view(-1) for g in g_loss]
-                    all_g = torch.cat(g_loss)
-                    metric = torch.abs(all_g * all_v)
+                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
+                    metric = torch.cat(gv)
                     nonzero_ratio = 0.3
                     num_params = metric.size(0)
                     nz = int(nonzero_ratio * num_params)
@@ -509,10 +508,9 @@ class BaseDeepAD(metaclass=ABCMeta):
                     self.thresh = top_values[-1]
 
                 for loss in losses:
-                    g_loss = grad(loss, params, create_graph=True)
-                    g_loss = [g.view(-1) for g in g_loss]
-                    all_g = torch.cat(g_loss)
-                    metric = torch.abs(all_g * all_v)
+                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
+                    metric = torch.cat(gv)
                     key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
                     num_key_param = torch.sum(key_param)
                     num_key_params.append(num_key_param.item())
@@ -541,10 +539,9 @@ class BaseDeepAD(metaclass=ABCMeta):
 
                 if ii == 0:
                     loss = losses[0]
-                    g_loss = grad(loss, params, create_graph=True)
-                    g_loss = [g.view(-1) for g in g_loss]
-                    all_g = torch.cat(g_loss)
-                    metric = torch.abs(all_g * all_v)
+                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
+                    metric = torch.cat(gv)
                     nonzero_ratio = 0.6
                     num_params = metric.size(0)
                     nz = int(nonzero_ratio * num_params)
@@ -553,11 +550,9 @@ class BaseDeepAD(metaclass=ABCMeta):
 
                 for loss in losses:
                     # 有提速空间 #
-                    g_loss = grad(loss, params, create_graph=True)
-                    g_loss = [g.view(-1) for g in g_loss]
-                    all_g = torch.cat(g_loss)
-                    # 有提速空间 #
-                    metric = torch.abs(all_g * all_v)
+                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
+                    metric = torch.cat(gv)
                     key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
                     num_key_param = torch.sum(key_param)
                     num_key_params.append(num_key_param.item())
@@ -589,7 +584,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         elif self.sample_selection == 5:
             pass
 
-        elif self.sample_selection == 6:
+        elif self.sample_selection == 6:        # arxiv22
             if len(self.train_data) <= int(self.n_samples*0.3):
                 return
 
@@ -635,10 +630,9 @@ class BaseDeepAD(metaclass=ABCMeta):
 
                 if ii == 0:
                     loss = losses[0]
-                    g_loss = grad(loss, params, create_graph=True)
-                    g_loss = [g.view(-1) for g in g_loss]
-                    all_g = torch.cat(g_loss)
-                    metric = torch.abs(all_g * all_v)
+                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
+                    metric = torch.cat(gv)
                     nonzero_ratio = 0.3
                     num_params = metric.size(0)
                     nz = int(nonzero_ratio * num_params)
@@ -647,11 +641,9 @@ class BaseDeepAD(metaclass=ABCMeta):
 
                 for loss in losses:
                     # 有提速空间 #
-                    g_loss = grad(loss, params, create_graph=True)
-                    g_loss = [g.view(-1) for g in g_loss]
-                    all_g = torch.cat(g_loss)
-                    # 有提速空间 #
-                    metric = torch.abs(all_g * all_v)
+                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
+                    metric = torch.cat(gv)
                     key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
                     key_param = key_param.cpu().detach().numpy()
                     key_params.append(key_param)
@@ -671,6 +663,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             for ii, key_param in enumerate(key_params):
                 f1[ii] = f1_score(true_key_param, key_param)
 
+            self.key_params_num_by_epoch.append(f1)
             # 待修改，根据重要参数，调整波动
             add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.3))        # 每次添加的数据量
             index = f1.argsort()[::-1][:add_num]  # 扩展重要参数含量最多的20%
