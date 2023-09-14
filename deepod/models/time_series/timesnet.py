@@ -157,8 +157,9 @@ class TimesNet(BaseDeepAD):
 
     def inference_forward(self, batch_x, net, criterion):
         batch_x = batch_x.float().to(self.device)
-        output, _ = net(batch_x)
+        output = net(batch_x)
         error = torch.nn.MSELoss(reduction='none')(output[:, -1:, :], batch_x[:, -1:, :])
+        error = error.mean(axis=1)
         error = error.mean(axis=1)
         return output, error
 
