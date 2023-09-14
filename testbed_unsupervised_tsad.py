@@ -36,7 +36,9 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='TranAD', help="TimesNet, TcnED, TranAD")
+parser.add_argument("--model", type=str, default='AnomalyTransformer',
+                    help="TcnED, TimesNet, TranAD, AnomalyTransformer"
+                    )
 
 parser.add_argument('--silent_header', action='store_true')
 parser.add_argument("--flag", type=str, default='')
@@ -78,7 +80,6 @@ def main():
     key_params_num_dir = f'{args.key_params_num_dir}/{args.model}.{args.flag}/'
     os.makedirs(key_params_num_dir, exist_ok=True)
 
-
     # # print header in the result file
     if not args.silent_header:
         f = open(result_file, 'a')
@@ -110,16 +111,12 @@ def main():
             entries = []
             t_lst = []
             for i in range(args.runs):
-
-
-
-                start_time = time.time()
                 print(f'\nRunning [{i+1}/{args.runs}] of [{args.model}] on Dataset [{dataset_name}]')
 
                 t1 = time.time()
                 clf = model_class(**model_configs, random_state=42+i)
                 clf.sample_selection = args.sample_selection
-                clf.fit(train_data)
+                clf.fit(train_data[:300])
                 t = time.time() - t1
 
                 scores = clf.decision_function(test_data)
@@ -137,11 +134,11 @@ def main():
                 entries.append(adj_eval_metrics)
                 t_lst.append(t)
 
-                if args.sample_selection == 1:
+                if args.sample_selection == 1 or args.sample_selection == 2 or args.sample_selection == 6:
                     loss_df = pd.DataFrame(clf.loss_by_epoch)
                     loss_df.to_csv(loss_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
 
-                if args.sample_selection == 3 or args.sample_selection == 4:
+                if args.sample_selection == 3 or args.sample_selection == 4 or args.sample_selection == 7:
                     key_params_num_df = pd.DataFrame(clf.key_params_num_by_epoch)
                     key_params_num_df.to_csv(key_params_num_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
 
@@ -165,7 +162,9 @@ def main():
 
 
 if __name__ == '__main__':
-    # for i in range(4):
-    #     args.sample_selection = i
-    #     main()
-    main()
+    for i in [1, 2, 4, 6, 7]:
+        print(i)
+        args.sample_selection = i
+        # args.runs = 1
+        main()
+    # main()

@@ -96,7 +96,7 @@ class TcnED(BaseDeepAD):
         cnt = 0
         self.net.zero_grad()
         for batch_x in self.train_loader:
-            self.inference_forward(batch_x, self.net, self.criterion)
+            # self.inference_forward(batch_x, self.net, self.criterion)
             loss = self.training_forward(batch_x, self.net, self.criterion)
             loss.backward()
             if self.sample_selection == 5:      # ICML21
