@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import TransformerEncoder, TransformerDecoder
-
+import time
 import numpy as np
 from torch.utils.data import DataLoader
 import math
@@ -28,15 +28,23 @@ class TranAD(BaseDeepAD):
         return
 
     def fit(self, X, y=None):
-        self.n_features = X.shape[1]
+        if self.sample_selection == 4 or self.sample_selection == 7:
+            self.ori_data = X
+            self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
+            X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
+            self.train_data = X_seqs
+            self.n_samples, self.n_features = X.shape
+        else:
+            X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+            self.train_data = X_seqs
+            self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
 
-        train_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
         self.net = TranADNet(
             feats=self.n_features,
             n_window=self.seq_len
         ).to(self.device)
 
-        dataloader = DataLoader(train_seqs, batch_size=self.batch_size,
+        self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
                                 shuffle=True, pin_memory=True)
 
         self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
@@ -44,8 +52,12 @@ class TranAD(BaseDeepAD):
 
         self.net.train()
         for e in range(self.epochs):
-            loss = self.training(dataloader, epoch=e)
-            print(f'Epoch {e+1},\t L1 = {loss}')
+            t1 = time.time()
+            loss = self.training(epoch=e)
+            self.do_sample_selection()
+            print(f'epoch{e + 1:3d}, '
+                  f'training loss: {loss:.6f}, '
+                  f'time: {time.time() - t1:.1f}s')
 
         self.decision_scores_ = self.decision_function(X)
         self.labels_ = self._process_decision_scores()
@@ -66,14 +78,14 @@ class TranAD(BaseDeepAD):
 
         return loss_final_pad
 
-    def training(self, dataloader, epoch):
+    def training(self, epoch):
         criterion = nn.MSELoss(reduction='none')
 
         n = epoch + 1
         l1s, l2s = [], []
 
         self.optimizer.zero_grad()
-        for ii, batch_x in enumerate(dataloader):
+        for ii, batch_x in enumerate(self.train_loader):
             local_bs = batch_x.shape[0]  #(128，30，19)
             window = batch_x.permute(1, 0, 2)  # (30, 128, 19)
             elem = window[-1, :, :].view(1, local_bs, self.n_features)  #(1, 128, 19)
