@@ -27,9 +27,18 @@ class AnomalyTransformer(BaseDeepAD):
         self.k = k
 
     def fit(self, X, y=None):
-        self.n_features = X.shape[1]
+        if self.sample_selection == 4 or self.sample_selection == 7:
+            self.ori_data = X
+            self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
+            X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
+            self.train_data = X_seqs
+            self.n_samples, self.n_features = X.shape
+        else:
+            X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+            self.train_data = X_seqs
+            self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
 
-        train_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+        # train_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
         self.net = AnomalyTransformerModel(
             win_size=self.seq_len,
             enc_in=self.n_features,
@@ -38,7 +47,7 @@ class AnomalyTransformer(BaseDeepAD):
             device=self.device
         ).to(self.device)
 
-        self.train_loader = DataLoader(train_seqs, batch_size=self.batch_size,
+        self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
                                 shuffle=True, pin_memory=True)
 
         self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
