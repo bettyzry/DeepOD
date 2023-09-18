@@ -57,7 +57,7 @@ class AnomalyTransformer(BaseDeepAD):
         for e in range(self.epochs):
             t1 = time.time()
             loss = self.training()
-            self.do_sample_selection()
+            self.do_sample_selection(e)
 
             print(f'epoch{e + 1:3d}, '
                   f'training loss: {loss:.6f}, '
@@ -116,9 +116,34 @@ class AnomalyTransformer(BaseDeepAD):
             loss1 = rec_loss - self.k * series_loss
             loss2 = rec_loss + self.k * prior_loss
 
-            # Minimax strategy
+                        # Minimax strategy
             loss1.backward(retain_graph=True)
             loss2.backward()
+
+            if self.sample_selection == 5:  # ICML21
+                to_concat_g = []
+                to_concat_v = []
+                clip = 0.2
+                for name, param in self.net.named_parameters():
+                    if param.grad is None:
+                        continue
+                    to_concat_g.append(param.grad.data.view(-1))
+                    to_concat_v.append(param.data.view(-1))
+                all_g = torch.cat(to_concat_g)
+                all_v = torch.cat(to_concat_v)
+                metric = torch.abs(all_g * all_v)
+                num_params = all_v.size(0)
+                nz = int(clip * num_params)
+                top_values, _ = torch.topk(metric, nz)
+                thresh = top_values[-1]
+
+                for name, param in self.net.named_parameters():
+                    if param.grad is None:
+                        continue
+                    mask = (torch.abs(param.data * param.grad.data) >= thresh).type(torch.cuda.FloatTensor)
+                    mask = mask * clip
+                    param.grad.data = mask * param.grad.data
+
             self.optimizer.step()
             self.optimizer.zero_grad()
 

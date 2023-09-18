@@ -18,7 +18,7 @@ import pandas as pd
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--runs", type=int, default=5,
+parser.add_argument("--runs", type=int, default=1,
                     help="how many times we repeat the experiments to obtain the average performance")
 parser.add_argument("--output_dir", type=str, default='@records/',
                     help="the output file path")
@@ -27,8 +27,9 @@ parser.add_argument("--loss_dir", type=str, default='@losses/',
 parser.add_argument("--key_params_num_dir", type=str, default='@key_params_num/',
                     help="the output file path")
 parser.add_argument("--dataset", type=str,
-                    default='ASD,SMAP,MSL',
-                    help='ASD,SMAP,MSL,SWaT_cut'
+                    default='ASD',
+                    help='ASD,SMAP,MSL,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
+                         'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     )
 parser.add_argument("--entities", type=str,
                     default='FULL',
@@ -36,7 +37,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='AnomalyTransformer',
+parser.add_argument("--model", type=str, default='TcnED',
                     help="TcnED, TimesNet, TranAD, AnomalyTransformer"
                     )
 
@@ -47,7 +48,7 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
 
 args = parser.parse_args()
 
@@ -116,7 +117,8 @@ def main():
                 t1 = time.time()
                 clf = model_class(**model_configs, random_state=42+i)
                 clf.sample_selection = args.sample_selection
-                clf.fit(train_data[:300])
+                clf.fit(test_data, labels)
+                # clf.fit(train_data)
                 t = time.time() - t1
 
                 scores = clf.decision_function(test_data)
@@ -162,7 +164,7 @@ def main():
 
 
 if __name__ == '__main__':
-    for i in [1, 2, 4, 6, 7]:
+    for i in [7]:        # 0, 5, 6, 7
         print(i)
         args.sample_selection = i
         # args.runs = 1

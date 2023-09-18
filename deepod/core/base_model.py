@@ -18,6 +18,9 @@ from torch.utils.data import DataLoader
 from scipy import stats
 from torch.autograd import grad
 from testbed.utils import split
+from sklearn.decomposition import PCA
+from sklearn.metrics import f1_score
+from scipy.spatial.distance import pdist
 
 
 class BaseDeepAD(metaclass=ABCMeta):
@@ -155,6 +158,8 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.ori_data = None
         self.seq_starts = None
         self.split = split(self.seq_len)
+        # self.pca = PCA(n_components=32)
+        self.true_key_param = None
         return
 
     def fit(self, X, y=None):
@@ -434,7 +439,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         # torch.backends.cudnn.benchmark = False
         # torch.backends.cudnn.deterministic = True
 
-    def do_sample_selection(self):
+    def do_sample_selection(self, epoch):
         if self.sample_selection == 0:          # 无操作
             pass
 
@@ -581,7 +586,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                            shuffle=True, pin_memory=True)
-        elif self.sample_selection == 5:
+        elif self.sample_selection == 5:        # ICLR21
             pass
 
         elif self.sample_selection == 6:        # arxiv22
@@ -624,66 +629,72 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.net.eval()
             params = [p for p in self.net.parameters() if p.requires_grad]
             all_v = torch.cat([param.data.view(-1) for param in params])
-            key_params = []
+            dis = np.zeros(len(self.train_data))
+            importance = None
             for ii, batch_x in enumerate(self.train_loader):
                 _, losses = self.inference_forward(batch_x, self.net, self.criterion)
 
-                if ii == 0:
-                    loss = losses[0]
-                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
-                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
-                    metric = torch.cat(gv)
-                    nonzero_ratio = 0.3
-                    num_params = metric.size(0)
-                    nz = int(nonzero_ratio * num_params)
-                    top_values, _ = torch.topk(metric, nz)
-                    self.thresh = top_values[-1]
+                # if ii == 0:
+                #     loss = losses[0]
+                #     g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+                #     gv = [torch.abs(g.view(-1) * all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
+                #     metric = torch.cat(gv)
+                #     nonzero_ratio = 0.3
+                #     num_params = metric.size(0)
+                #     nz = int(nonzero_ratio * num_params)
+                #     top_values, _ = torch.topk(metric, nz)
+                #     self.thresh = top_values[-1]
 
-                for loss in losses:
+                for jj, loss in enumerate(losses):
                     # 有提速空间 #
                     g_loss = grad(loss, params, create_graph=True, allow_unused=True)
                     gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
                     metric = torch.cat(gv)
-                    key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
-                    key_param = key_param.cpu().detach().numpy()
-                    key_params.append(key_param)
-                    # key_param_index = [ii for ii, k in enumerate(key_param) if k == 1]        # 关键参数
-                    # key_param_matrix.append(key_param_index)
+                    # key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
+                    # key_param = key_param.cpu().detach().numpy()
+                    metric = metric.cpu().detach().numpy()
+                    if ii == 0:
+                        importance = metric
+                    else:
+                        importance += metric
+
+                    if epoch == 0:      # 只累计importance
+                        pass
+                    else:
+                        # dis[ii] = 1 - f1_score(self.true_key_param, metric)
+                        dis[ii*self.batch_size+jj] = pdist(np.vstack([self.true_key_param, metric]), 'cosine')
             self.net.train()
 
-            # 聚类key_param_matrix
-            importance = np.sum(key_params, axis=0)     # 按列求和
-            param_num = importance.shape[0]
-            # key_param_index = np.sort(importance.argsort()[::-1][:int(param_num*0.3)])
-            threshold = param_num*0.3       # 超过30%的数据都认为该参数为重要参数
-            true_key_param = [1 if i >= threshold else 0 for i in importance]
+            self.true_key_param = importance
+            # param_num = importance.shape[0]
+            # threshold = param_num*0.3       # 超过30%的数据都认为该参数为重要参数
+            # self.true_key_param = [1 if i >= threshold else 0 for i in importance]
 
-            from sklearn.metrics import f1_score
-            f1 = np.zeros(len(self.train_data))
-            for ii, key_param in enumerate(key_params):
-                f1[ii] = f1_score(true_key_param, key_param)
+            self.key_params_num_by_epoch.append(dis)
+            if epoch == 0:  # 第一轮只统计true_key_param，不进行筛选
+                pass
+            else:
+                # self.key_params_num_by_epoch.append(dis)
+                # 待修改，根据重要参数，调整波动
+                add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.3))        # 每次添加的数据量
+                index = dis.argsort()[:add_num]  # 扩展距离最小的20%
+                index = np.sort(index)
+                imp_seq_starts = self.seq_starts[index]
+                for imp_seq_start in imp_seq_starts:
+                    if imp_seq_start-self.split[0] >= 0:
+                        self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[0])
+                    if imp_seq_start+self.split[1] <= self.n_samples - self.seq_len + 1:
+                        self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[1])
+                    if imp_seq_start-self.split[1] >= 0:
+                        self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[1])
+                    if imp_seq_start+self.split[0] <= self.n_samples - self.seq_len + 1:
+                        self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[0])
 
-            self.key_params_num_by_epoch.append(f1)
-            # 待修改，根据重要参数，调整波动
-            add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.3))        # 每次添加的数据量
-            index = f1.argsort()[::-1][:add_num]  # 扩展重要参数含量最多的20%
-            index = np.sort(index)
-            imp_seq_starts = self.seq_starts[index]
-            for imp_seq_start in imp_seq_starts:
-                if imp_seq_start-self.split[0] >= 0:
-                    self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[0])
-                if imp_seq_start+self.split[1] <= self.n_samples - self.seq_len + 1:
-                    self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[1])
-                if imp_seq_start-self.split[1] >= 0:
-                    self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[1])
-                if imp_seq_start+self.split[0] <= self.n_samples - self.seq_len + 1:
-                    self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[0])
-
-            self.seq_starts = np.sort(self.seq_starts)
-            self.seq_starts = np.unique(self.seq_starts, axis=0)
-            self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
-            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
-                                           shuffle=True, pin_memory=True)
+                self.seq_starts = np.sort(self.seq_starts)
+                self.seq_starts = np.unique(self.seq_starts, axis=0)
+                self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
+                self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
+                                               shuffle=True, pin_memory=True)
 
         else:
             print('ERROR')

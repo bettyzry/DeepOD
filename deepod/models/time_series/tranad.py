@@ -5,7 +5,7 @@ import time
 import numpy as np
 from torch.utils.data import DataLoader
 import math
-from deepod.utils.utility import get_sub_seqs
+from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label
 from deepod.core.base_model import BaseDeepAD
 
 
@@ -32,7 +32,9 @@ class TranAD(BaseDeepAD):
             self.ori_data = X
             self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
             X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
+            y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
             self.train_data = X_seqs
+            self.train_label = y_seqs
             self.n_samples, self.n_features = X.shape
         else:
             X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
@@ -51,10 +53,11 @@ class TranAD(BaseDeepAD):
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
 
         self.net.train()
+        self.key_params_num_by_epoch.append(self.train_label)
         for e in range(self.epochs):
             t1 = time.time()
             loss = self.training(epoch=e)
-            self.do_sample_selection()
+            self.do_sample_selection(e)
             print(f'epoch{e + 1:3d}, '
                   f'training loss: {loss:.6f}, '
                   f'time: {time.time() - t1:.1f}s')
@@ -106,6 +109,8 @@ class TranAD(BaseDeepAD):
                 to_concat_v = []
                 clip = 0.2
                 for name, param in self.net.named_parameters():
+                    if param.grad is None:
+                        continue
                     to_concat_g.append(param.grad.data.view(-1))
                     to_concat_v.append(param.data.view(-1))
                 all_g = torch.cat(to_concat_g)
@@ -117,6 +122,8 @@ class TranAD(BaseDeepAD):
                 thresh = top_values[-1]
 
                 for name, param in self.net.named_parameters():
+                    if param.grad is None:
+                        continue
                     mask = (torch.abs(param.data * param.grad.data) >= thresh).type(torch.cuda.FloatTensor)
                     mask = mask * clip
                     param.grad.data = mask * param.grad.data

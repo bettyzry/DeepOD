@@ -55,7 +55,7 @@ class TcnED(BaseDeepAD):
                 self.ori_data = X
                 self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)     # 无重叠计算seq
                 X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
-                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
+                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
                 self.train_data = X_seqs
                 self.train_label = y_seqs
                 self.n_samples, self.n_features = X.shape
@@ -85,9 +85,10 @@ class TcnED(BaseDeepAD):
                                          lr=self.lr,
                                          eps=1e-6)
             self.net.train()
+            self.key_params_num_by_epoch.append(self.train_label)
             for epoch in range(self.epochs):
                 self.training(epoch)
-                self.do_sample_selection()
+                self.do_sample_selection(epoch)
         return self
 
     def training(self, epoch):

@@ -63,7 +63,7 @@ class TimesNet(BaseDeepAD):
         for e in range(self.epochs):
             t1 = time.time()
             loss = self.training()
-            self.do_sample_selection()
+            self.do_sample_selection(e)
 
             print(f'epoch{e + 1:3d}, '
                   f'training loss: {loss:.6f}, '
@@ -106,6 +106,8 @@ class TimesNet(BaseDeepAD):
                 to_concat_v = []
                 clip = 0.2
                 for name, param in self.net.named_parameters():
+                    if param.grad is None:
+                        continue
                     to_concat_g.append(param.grad.data.view(-1))
                     to_concat_v.append(param.data.view(-1))
                 all_g = torch.cat(to_concat_g)
@@ -117,6 +119,8 @@ class TimesNet(BaseDeepAD):
                 thresh = top_values[-1]
 
                 for name, param in self.net.named_parameters():
+                    if param.grad is None:
+                        continue
                     mask = (torch.abs(param.data * param.grad.data) >= thresh).type(torch.cuda.FloatTensor)
                     mask = mask * clip
                     param.grad.data = mask * param.grad.data
