@@ -36,7 +36,7 @@ COUTA:
   batch_size: 64
 
 TcnED:
-  epochs: 2
+  epochs: 100
   batch_size: 128
   lr: 0.00015
   dropout: 0.42

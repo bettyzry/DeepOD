@@ -87,17 +87,21 @@ class TcnED(BaseDeepAD):
             self.net.train()
             self.key_params_num_by_epoch.append(self.train_label)
             for epoch in range(self.epochs):
-                self.training(epoch)
+                t1 = time.time()
+                loss = self.training(epoch)
                 self.do_sample_selection(epoch)
+
+                print(f'epoch{epoch + 1:3d}, '
+                      f'training loss: {loss:.6f}, '
+                      f'time: {time.time() - t1:.1f}s')
         return self
 
     def training(self, epoch):
-        t1 = time.time()
         total_loss = 0
         cnt = 0
         self.net.zero_grad()
         for batch_x in self.train_loader:
-            # self.inference_forward(batch_x, self.net, self.criterion)
+            batch_x = batch_x.float().to(self.device)
             loss = self.training_forward(batch_x, self.net, self.criterion)
             loss.backward()
             if self.sample_selection == 5:      # ICML21
@@ -129,16 +133,8 @@ class TcnED(BaseDeepAD):
             if cnt > self.epoch_steps != -1:
                 break
 
-        t = time.time() - t1
-        print(f'epoch{epoch + 1:3d}, '
-              f'training loss: {total_loss / cnt:.6f}, '
-              f'time: {t:.1f}s')
-
-        if epoch == 0:
-            self.epoch_time = t
-
         self.epoch_update()
-        return
+        return total_loss / cnt
 
     def training_prepare(self, X, y):
         train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=False)
@@ -167,9 +163,9 @@ class TcnED(BaseDeepAD):
         return test_loader
 
     def training_forward(self, batch_x, net, criterion):
-        ts_batch = batch_x.float().to(self.device)
-        output, _ = net(ts_batch)
-        loss = criterion(output[:, -1], ts_batch[:, -1])
+        batch_x = batch_x.float().to(self.device)
+        output, _ = net(batch_x)
+        loss = torch.nn.MSELoss(reduction='mean')(output[:, -1], batch_x[:, -1])
         return loss
 
     def inference_forward(self, batch_x, net, criterion):

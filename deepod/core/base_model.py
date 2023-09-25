@@ -17,6 +17,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from scipy import stats
 from torch.autograd import grad
+from torch.autograd.functional import hessian
 from testbed.utils import split
 from sklearn.decomposition import PCA
 from sklearn.metrics import f1_score
@@ -160,6 +161,9 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.split = split(self.seq_len)
         # self.pca = PCA(n_components=32)
         self.true_key_param = None
+        self.param_musk = None
+        self.params = []
+        self.all_v = None
         return
 
     def fit(self, X, y=None):
@@ -626,49 +630,29 @@ class BaseDeepAD(metaclass=ABCMeta):
             if len(self.train_data) >= int(self.n_samples // self.seq_len * 2):
                 return
 
-            self.net.eval()
-            params = [p for p in self.net.parameters() if p.requires_grad]
-            all_v = torch.cat([param.data.view(-1) for param in params])
             dis = np.zeros(len(self.train_data))
             importance = None
+            self.net.eval()
             for ii, batch_x in enumerate(self.train_loader):
-                _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+                metric = self.get_importance_ICLR21(batch_x, epoch, ii)
+                # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
 
-                # if ii == 0:
-                #     loss = losses[0]
-                #     g_loss = grad(loss, params, create_graph=True, allow_unused=True)
-                #     gv = [torch.abs(g.view(-1) * all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
-                #     metric = torch.cat(gv)
-                #     nonzero_ratio = 0.3
-                #     num_params = metric.size(0)
-                #     nz = int(nonzero_ratio * num_params)
-                #     top_values, _ = torch.topk(metric, nz)
-                #     self.thresh = top_values[-1]
+                if ii == 0:
+                    importance = np.sum(metric, axis=0)
+                else:
+                    importance = importance + np.sum(metric, axis=0)
 
-                for jj, loss in enumerate(losses):
-                    # 有提速空间 #
-                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
-                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
-                    metric = torch.cat(gv)
-                    # key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
-                    # key_param = key_param.cpu().detach().numpy()
-                    metric = metric.cpu().detach().numpy()
-                    if ii == 0:
-                        importance = metric
-                    else:
-                        importance += metric
-
-                    if epoch == 0:      # 只累计importance
-                        pass
-                    else:
-                        # dis[ii] = 1 - f1_score(self.true_key_param, metric)
-                        dis[ii*self.batch_size+jj] = pdist(np.vstack([self.true_key_param, metric]), 'cosine')
+                if epoch == 0:      # 只累计importance
+                    pass
+                else:
+                    dis[ii*self.batch_size: (ii+1)*self.batch_size] = np.linalg.norm(self.true_key_param-metric, axis=1) # L2范数
             self.net.train()
 
-            self.true_key_param = importance
-            # param_num = importance.shape[0]
-            # threshold = param_num*0.3       # 超过30%的数据都认为该参数为重要参数
-            # self.true_key_param = [1 if i >= threshold else 0 for i in importance]
+            if epoch == 0:
+                self.param_musk = np.sort(importance.argsort()[:10000])     # 前10000个最重要的数据
+                self.true_key_param = importance[self.param_musk]
+            else:
+                self.true_key_param = importance
 
             self.key_params_num_by_epoch.append(dis)
             if epoch == 0:  # 第一轮只统计true_key_param，不进行筛选
@@ -698,3 +682,137 @@ class BaseDeepAD(metaclass=ABCMeta):
 
         else:
             print('ERROR')
+
+    def get_importance_ICLR21(self, batch_x, epoch, ii):
+        _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+
+        if ii == 0:             # 是第一个batch，更新all_v
+            if epoch != 0:      # 不是第一轮迭代
+                self.all_v = np.concatenate([param.data.view(-1).cpu().detach().numpy() for param in self.params])[
+                    self.param_musk]
+            else:
+                params = [p for p in self.net.parameters() if p.requires_grad]
+                loss = losses[0]
+                g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+                for jj, g in enumerate(g_loss):
+                    if g is not None:
+                        self.params.append(params[jj])
+                self.all_v = torch.cat([param.data.view(-1) for param in self.params]).cpu().detach().numpy()
+
+        gv_metric = []
+        for jj, loss in enumerate(losses):
+            # 有提速空间 #
+            g_loss = grad(loss, self.params, create_graph=True, allow_unused=True)
+            gv = torch.cat([g.view(-1) for g in g_loss]).cpu().detach().numpy()
+            if self.param_musk is not None:
+                gv = gv[self.param_musk]  # 只保留最重要的万个参数
+            gv_metric.append(gv)
+        metric = gv_metric * self.all_v
+        return metric
+
+    def get_importance_ICML17(self, batch_x, epoch, ii):
+        _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+        if epoch == 0 and ii == 0:
+            params = [p for p in self.net.parameters() if p.requires_grad]
+            loss = losses[0]
+            g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+            for jj, g in enumerate(g_loss):
+                if g is not None:
+                    self.params.append(params[jj])
+
+        size = len(batch_x)
+        metric = []
+        for z_train in batch_x:
+            z_train = self.train_loader.collate_fn([z_train])
+            h_estimate = self.s_test(z_train, batch_x)
+            metric.append(h_estimate)
+
+        metric = np.array(metric)
+        metric = np.sum(metric, axis=0)/size        # 按列求和
+
+        #
+        # gv_metric1 = []
+        # gv_metric2 = []
+        # for jj, loss in enumerate(losses):
+        #     # 有提速空间 #
+        #     g_loss1 = grad(loss, self.params, create_graph=True, allow_unused=True)         # 1阶导
+        #     g_loss2 = hessian(loss, self.params)        # 有问题
+        #     gv1 = torch.cat([g.view(-1) for g in g_loss1]).cpu().detach().numpy()
+        #     gv2 = torch.cat([g.view(-1) for g in g_loss2]).cpu().detach().numpy()
+        #     if self.param_musk is not None:
+        #         gv1 = gv1[self.param_musk]  # 只保留最重要的万个参数
+        #         gv2 = gv2[self.param_musk, :]  # 只保留最重要的万个参数
+        #         gv2 = gv2[:, self.param_musk]  # 只保留最重要的万个参数，矩阵
+        #     gv_metric1.append(gv1)
+        #     if jj == 0:
+        #         gv_metric2 = gv2
+        #     else:
+        #         gv_metric2 += gv2
+
+        # H = np.linalg.inv(gv_metric2)
+        # gv_metric1 = np.array(gv_metric1)
+        # metric = np.dot(H, gv_metric1) / size
+        return metric
+
+    def s_test(self, z_train, batch_x, damp=0.01, scale=25.0,
+               recursion_depth=5000):
+        """s_test can be precomputed for each test point of interest, and then
+        multiplied with grad_z to get the desired value for each training point.
+        Here, strochastic estimation is used to calculate s_test. s_test is the
+        Inverse Hessian Vector Product.
+
+        Arguments:
+            z_test: torch tensor, test data points, such as test images
+            t_test: torch tensor, contains all test data labels
+            model: torch NN, model used to evaluate the dataset
+            z_loader: torch Dataloader, can load the training dataset
+            gpu: int, GPU id to use if >=0 and -1 means use CPU
+            damp: float, dampening factor
+            scale: float, scaling factor
+            recursion_depth: int, number of iterations aka recursion depth
+                should be enough so that the value stabilises.
+
+        Returns:
+            h_estimate: list of torch tensors, s_test"""
+
+        self.net.eval()
+        _, loss = self.inference_forward(z_train, self.net, self.criterion)
+        v = list(grad(loss, self.params, create_graph=True))
+        h_estimate = v.copy()
+        ################################
+        # once h_estimate stabilises
+        ################################
+        _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+        for i in range(recursion_depth):
+            # take just one random sample from training dataset
+            # easiest way to just use the DataLoader once, break at the end of loop
+            #########################
+            loc = random.randint(0, len(batch_x))
+            loss = losses[loc]
+            # loss = self.training_forward(batch_x, self.net, self.criterion)
+            hv = self.hvp(loss, self.params, h_estimate)
+            # Recursively caclulate h_estimate  递归计算 求逆
+            h_estimate = [
+                _v + (1 - damp) * _h_e - _hv / scale
+                for _v, _h_e, _hv in zip(v, h_estimate, hv)]
+        return h_estimate
+
+    def hvp(self, y, w, v):
+        """
+        Arguments:
+            y: 标量/tensor，通常来说为loss函数的输出
+            w: pytorch tensor的list，代表需要被求解hessian矩阵的参数
+            v: pytorch tensor的list，代表需要与hessian矩阵乘积的向量
+        Returns:
+            return_grads: pytorch tensor的list, 代表hvp的最终结果.
+        Raises:
+            ValueError: y 与 w 长度不同."""
+        if len(w) != len(v):
+            raise (ValueError("w and v must have the same length."))
+        for i, v_ele in enumerate(v):
+            v[i] = v_ele.cuda()
+        # First backprop
+        first_grads = grad(y, w, retain_graph=True, create_graph=True)
+        # Second backprop
+        return_grads = grad(first_grads, w, grad_outputs=v, retain_graph=False, create_graph=False)
+        return return_grads
