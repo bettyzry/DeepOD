@@ -348,4 +348,11 @@ def split(num):
     return dic[num]
 
 
+def to_csv(lst):
+    df = pd.DataFrame()
+    for l in lst:
+        df = df.append(pd.DataFrame(l.T).transpose())
+    return df
+
+
 split(30)

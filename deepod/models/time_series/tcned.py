@@ -32,7 +32,7 @@ class TcnED(BaseDeepAD):
 
         return
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, Xtest=None, Ytest=None):
         """
         Fit detector. y is ignored in unsupervised methods.
 
@@ -54,10 +54,14 @@ class TcnED(BaseDeepAD):
             if self.sample_selection == 4 or self.sample_selection == 7:
                 self.ori_data = X
                 self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)     # 无重叠计算seq
+                self.trainsets['seqstarts0'] = self.seq_starts
                 X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
                 y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
                 self.train_data = X_seqs
                 self.train_label = y_seqs
+                if self.train_label is not None:
+                    self.trainsets['yseq0'] = self.train_label
+                    self.ori_label = y
                 self.n_samples, self.n_features = X.shape
             else:
                 X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
@@ -84,8 +88,8 @@ class TcnED(BaseDeepAD):
             self.optimizer = torch.optim.Adam(self.net.parameters(),
                                          lr=self.lr,
                                          eps=1e-6)
+
             self.net.train()
-            self.key_params_num_by_epoch.append(self.train_label)
             for epoch in range(self.epochs):
                 t1 = time.time()
                 loss = self.training(epoch)
@@ -94,7 +98,15 @@ class TcnED(BaseDeepAD):
                 print(f'epoch{epoch + 1:3d}, '
                       f'training loss: {loss:.6f}, '
                       f'time: {time.time() - t1:.1f}s')
-        return self
+
+                if Xtest is not None and Ytest is not None:
+                    scores = self.decision_function(Xtest)
+                    eval_metrics = ts_metrics(Ytest, scores)
+                    adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
+                    result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1], adj_eval_metrics[2]]
+                    print(result)
+                    self.result_detail.append(result)
+        return
 
     def training(self, epoch):
         total_loss = 0
@@ -165,7 +177,10 @@ class TcnED(BaseDeepAD):
     def training_forward(self, batch_x, net, criterion):
         batch_x = batch_x.float().to(self.device)
         output, _ = net(batch_x)
-        loss = torch.nn.MSELoss(reduction='mean')(output[:, -1], batch_x[:, -1])
+        # loss = torch.nn.MSELoss(reduction='mean')(output[:, -1], batch_x[:, -1])
+        loss = torch.nn.MSELoss(reduction='none')(output[:, -1], batch_x[:, -1])
+        loss = loss.mean(axis=1)
+        loss = loss.mean()
         return loss
 
     def inference_forward(self, batch_x, net, criterion):

@@ -7,6 +7,7 @@ import math
 import time
 from deepod.utils.utility import get_sub_seqs
 from deepod.core.base_model import BaseDeepAD
+from deepod.metrics import ts_metrics, point_adjustment
 
 
 class TimesNet(BaseDeepAD):
@@ -28,7 +29,7 @@ class TimesNet(BaseDeepAD):
         self.top_k = top_k
         self.num_kernels = num_kernels
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, Xtest=None, Ytest=None):
         if self.sample_selection == 4 or self.sample_selection == 7:
             self.ori_data = X
             self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
@@ -68,6 +69,15 @@ class TimesNet(BaseDeepAD):
             print(f'epoch{e + 1:3d}, '
                   f'training loss: {loss:.6f}, '
                   f'time: {time.time() - t1:.1f}s')
+
+            if Xtest is not None and Ytest is not None:
+                scores = self.decision_function(Xtest)
+                eval_metrics = ts_metrics(Ytest, scores)
+                adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
+                result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
+                          adj_eval_metrics[2]]
+                print(result)
+                self.result_detail.append(result)
 
         # self.decision_scores_ = self.decision_function(X)
         # self.labels_ = self._process_decision_scores()  # in base model

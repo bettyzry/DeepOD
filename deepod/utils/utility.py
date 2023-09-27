@@ -57,3 +57,31 @@ def get_sub_seqs_label(y, seq_len=100, stride=1):
     return y_binary
 
 
+def get_sub_seqs_label2(y, seq_starts, seq_len):
+    """
+
+    Parameters
+    ----------
+    y: np.array, required
+        data labels
+
+    seq_len: int, optional (default=100)
+        Size of window used to create subsequences from the data
+
+    stride: int, optional (default=1)
+        number of time points the window will move between two subsequences
+
+    Returns
+    -------
+    y_seqs: np.array
+        Split label of each sequence
+    """
+
+    ys = np.array([y[i:i + seq_len] for i in seq_starts])
+    y = np.sum(ys, axis=1) / seq_len
+
+    y_binary = np.zeros_like(y)
+    y_binary[np.where(y!=0)[0]] = 1
+    return y_binary
+
+
