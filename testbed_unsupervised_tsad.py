@@ -14,6 +14,7 @@ import numpy as np
 from testbed.utils import import_ts_data_unsupervised
 from deepod.metrics import ts_metrics, point_adjustment
 import pandas as pd
+from deepod.utils.utility import insert_pollution
 
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
 
@@ -28,6 +29,7 @@ parser.add_argument("--key_params_num_dir", type=str, default='@key_params_num/'
                     help="the output file path")
 parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
+
 parser.add_argument("--dataset", type=str,
                     default='ASD',
                     help='ASD,SMAP,MSL,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
@@ -50,9 +52,13 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
-
+parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
+parser.add_argument('--rate', type=float, default=0.2)              # 污染率
 args = parser.parse_args()
+
+# rate_list = [0, 0.01, 0.02, 0.1, 0.15, 0.2]
+# rate_list = [0.2, 0.4, 0.6, 0.8]
+# rate = 0.2
 
 module = imp.import_module('deepod.models')
 model_class = getattr(module, args.model)
@@ -112,7 +118,7 @@ def main():
         entity_metric_lst = []
         entity_metric_std_lst = []
         for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
-
+            train_data, train_labels = insert_pollution(train_data, test_data, labels, args.rate, args.seq_len)
             entries = []
             t_lst = []
             for i in range(args.runs):
@@ -121,7 +127,8 @@ def main():
                 t1 = time.time()
                 clf = model_class(**model_configs, random_state=42+i)
                 clf.sample_selection = args.sample_selection
-                clf.fit(test_data, labels)
+                clf.fit(train_data, train_labels, test_data, labels)
+                # clf.fit(test_data, labels)
                 # clf.fit(train_data, None, test_data, labels)
                 t = time.time() - t1
 
@@ -150,6 +157,9 @@ def main():
                         key_params_num_df.to_csv(key_params_num_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
                         trainsets_df = pd.DataFrame.from_dict(clf.trainsets, orient='index').transpose()
                         trainsets_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
+                    if len(clf.result_detail) != 0:
+                        df_result = pd.DataFrame(clf.result_detail, columns=['auc', 'pr', 'f1', 'adjauc', 'adjpr', 'adjf1'])
+                        df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{args.rate}.{i}.csv'))
 
             avg_entry = np.average(np.array(entries), axis=0)
             std_entry = np.std(np.array(entries), axis=0)

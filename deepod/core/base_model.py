@@ -167,6 +167,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.params = []
         self.all_v = None
         self.trainsets = {}
+        self.result_detail = []
         return
 
     def fit(self, X, y=None):

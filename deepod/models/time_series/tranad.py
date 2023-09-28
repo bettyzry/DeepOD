@@ -33,13 +33,13 @@ class TranAD(BaseDeepAD):
             self.ori_label = y
             self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
             X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
+            self.trainsets['seqstarts0'] = self.seq_starts
             y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
             self.train_data = X_seqs
             self.train_label = y_seqs
             if self.train_label is not None:
-                self.trainsets.append(self.train_label)
+                self.trainsets['yseq0'] = self.train_label
             self.n_samples, self.n_features = X.shape
-            self.trainsets.append(self.seq_starts)
         else:
             X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
             self.train_data = X_seqs

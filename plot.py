@@ -19,13 +19,14 @@ def zscore(x):
     return (x - np.min(x)) / (np.max(x) - np.min(x))  # 最值归一化
 
 
-def plot_distribution():
+def plot_distribution(data_root, step):
+    step = str(step)
     data_pkg = import_ts_data_unsupervised(dataset_root,
                                            fillname, entities='FULL',
                                            combine=1)
     train_lst, test_lst, label_lst, name_lst = data_pkg
     y = label_lst[0]
-    y_seqs = get_sub_seqs_label(y, seq_len=30, stride=30)
+    y_seqs = get_sub_seqs_label(y, seq_len=30, stride=1)
     df = pd.read_csv(data_root)
     df = df.fillna(0)
     new_df = pd.DataFrame()
@@ -56,7 +57,7 @@ def plot_distribution():
     plt.show()
 
 
-def plot1(fillname, step):
+def plot1(data_root, fillname, step):
     df = pd.read_csv(data_root, index_col=0)
 
     # watch = df[['0', '1', '2', '3', '4', '50', '99']]
@@ -79,23 +80,35 @@ def plot1(fillname, step):
     return
 
 
+def plotT(data_root, step):
+    df = pd.read_csv(data_root)
+    label = 'yseq'+str(step)
+    loss = 'dis'+str(step+1)
+    new_df = pd.DataFrame()
+
+    new_df['label'] = df[label].values
+    new_df['loss'] = df[loss].values
+    adjloss = point_adjustment(new_df['label'].values, new_df['loss'].values)
+    new_df['adjloss'] = adjloss
+
+    true = new_df[new_df.label == 0]
+    false = new_df[new_df.label == 1]
+
+    # 绘制多个变量的密度分布图
+    sns.kdeplot(true['loss'], shade=True, color="r")
+    sns.kdeplot(false['loss'], shade=True, color="b")
+    plt.show()
+
+    sns.kdeplot(true['adjloss'], shade=True, color="r")
+    sns.kdeplot(false['adjloss'], shade=True, color="b")
+    plt.show()
+
+
 if __name__ == '__main__':
     fillname = 'ASD'     # 'MSL_combined'
-    step = '0'
-    data_root = '/home/xuhz/zry/DeepOD-new/@key_params_num/TimesNet./%s_combined_myfunc0T.csv' % fillname
-    # data_root = '/home/xuhz/zry/tsad-master/&results/loss/loss-record@TcnED_100_0_0_MSLFULL_norm/@loss_results0.csv'
-    # plot1(fillname, step)
-    plot_distribution()
+    step = 0
+    data_root = '/home/xuhz/zry/DeepOD-new/@losses/TimesNet./%s_combined_norm0-T.csv' % fillname
+    plot_distribution(data_root, step)
 
-    # x = np.random.random(1000000)
-    # y = np.random.random(1000000)
-    # x2 = np.random.randint(2, size=1000000)
-    # y2 = np.random.randint(2, size=1000000)
-    #
-    # t1 = time.time()
-    # f1_score(x2, y2)
-    # t2 = time.time()
-    # pdist(np.vstack([x, y]), 'cosine')
-    # t3 = time.time()
-    # print(t2-t1)
-    # print(t3-t2)
+    # data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TranAD./%s_combined_myfunc0.csv' % fillname
+    # plotT(data_root, step)

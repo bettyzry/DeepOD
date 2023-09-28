@@ -71,6 +71,7 @@ class TimesNet(BaseDeepAD):
                   f'time: {time.time() - t1:.1f}s')
 
             if Xtest is not None and Ytest is not None:
+                self.net.eval()
                 scores = self.decision_function(Xtest)
                 eval_metrics = ts_metrics(Ytest, scores)
                 adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
@@ -78,6 +79,7 @@ class TimesNet(BaseDeepAD):
                           adj_eval_metrics[2]]
                 print(result)
                 self.result_detail.append(result)
+                self.net.train()
 
         # self.decision_scores_ = self.decision_function(X)
         # self.labels_ = self._process_decision_scores()  # in base model

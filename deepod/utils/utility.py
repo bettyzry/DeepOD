@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn import metrics
+import random
 
 
 def get_sub_seqs(x_arr, seq_len=100, stride=1):
@@ -85,3 +86,17 @@ def get_sub_seqs_label2(y, seq_starts, seq_len):
     return y_binary
 
 
+def insert_pollution(train_data, test_data, labels, rate, seq_len):
+    test_seq = get_sub_seqs(test_data, seq_len=seq_len, stride=1)
+    y_seqs = get_sub_seqs_label(labels, seq_len=seq_len, stride=1)
+    oseqs = np.where(y_seqs == 1)[0]
+    okinds = len(oseqs)
+    datasize = len(train_data)
+    onum = int(datasize*rate/seq_len)
+    ostarts = [random.randint(0, datasize-seq_len-1) for i in range(onum)]
+    train_labels = np.zeros(datasize)
+    for ostart in ostarts:
+        index = random.randint(0, okinds-1)
+        train_data[ostart: ostart+seq_len] += test_seq[index]
+        train_labels[ostart: ostart+seq_len] = 1
+    return train_data, train_labels
