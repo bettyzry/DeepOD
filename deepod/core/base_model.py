@@ -149,8 +149,6 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.random_state = random_state
         self.set_seed(random_state)
 
-        self.loss_by_epoch = {}
-        self.key_params_num_by_epoch = {}
         self.sample_selection = sample_selection
         self.save_rate = 0.8
         self.add_rate = 0.1
@@ -454,106 +452,9 @@ class BaseDeepAD(metaclass=ABCMeta):
             for ii, batch_x in enumerate(self.train_loader):
                 _, losses = self.inference_forward(batch_x, self.net, self.criterion)
                 train_loss_now = np.concatenate([train_loss_now, losses.cpu().detach().numpy()])
-            self.loss_by_epoch[str(epoch)] = train_loss_now
-            self.trainsets['dis' + str(epoch)] = train_loss_now
+            self.trainsets['loss' + str(epoch)] = train_loss_now
             self.net.train()  # 使用完全的网络来计算
 
-        elif self.sample_selection == 3:        # 保留重要参数多的数据，待提速
-            if len(self.train_data) <= int(self.n_samples*0.3):
-                return
-
-            self.net.eval()
-            params = [p for p in self.net.parameters() if p.requires_grad]
-            num_key_params = []
-            all_v = [param.data.view(-1) for param in params]
-            for ii, batch_x in enumerate(self.train_loader):
-                _, losses = self.inference_forward(batch_x, self.net, self.criterion)
-
-                if ii == 0:
-                    loss = losses[0]
-                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
-                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
-                    metric = torch.cat(gv)
-                    nonzero_ratio = 0.3
-                    num_params = metric.size(0)
-                    nz = int(nonzero_ratio * num_params)
-                    top_values, _ = torch.topk(metric, nz)
-                    self.thresh = top_values[-1]
-
-                for loss in losses:
-                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
-                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
-                    metric = torch.cat(gv)
-                    key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
-                    num_key_param = torch.sum(key_param)
-                    num_key_params.append(num_key_param.item())
-                # num_key_params = np.concatenate([num_key_params, num_key_param.cpu().detach().numpy()])
-            self.key_params_num_by_epoch[str(epoch)] = num_key_params
-            self.net.train()
-
-            num_key_params = np.array(num_key_params)
-            save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
-            # save_num = int(self.save_rate * len(self.train_data))
-            index = num_key_params.argsort()[::-1][:save_num]       # 降序，保留多的save_num个
-            self.train_data = self.train_data[np.sort(index)]
-            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
-                                      shuffle=True, pin_memory=True)
-
-        elif self.sample_selection == 4:        # 增量方法
-            if len(self.train_data) >= int(self.n_samples // self.seq_len * 2):
-                return
-
-            self.net.eval()
-            params = [p for p in self.net.parameters() if p.requires_grad]
-            num_key_params = []
-            all_v = torch.cat([param.data.view(-1) for param in params])
-            for ii, batch_x in enumerate(self.train_loader):
-                _, losses = self.inference_forward(batch_x, self.net, self.criterion)
-
-                if ii == 0:
-                    loss = losses[0]
-                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
-                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
-                    metric = torch.cat(gv)
-                    nonzero_ratio = 0.6
-                    num_params = metric.size(0)
-                    nz = int(nonzero_ratio * num_params)
-                    top_values, _ = torch.topk(metric, nz)
-                    self.thresh = top_values[-1]
-
-                for loss in losses:
-                    # 有提速空间 #
-                    g_loss = grad(loss, params, create_graph=True, allow_unused=True)
-                    gv = [torch.abs(g.view(-1)*all_v[ii]) for ii, g in enumerate(g_loss) if g is not None]
-                    metric = torch.cat(gv)
-                    key_param = (metric >= self.thresh).type(torch.cuda.FloatTensor)
-                    num_key_param = torch.sum(key_param)
-                    num_key_params.append(num_key_param.item())
-                # num_key_params = np.concatenate([num_key_params, num_key_param.cpu().detach().numpy()])
-            num_key_params = np.array(num_key_params)
-            self.key_params_num_by_epoch[str(epoch)] = num_key_params
-            self.net.train()
-
-            # 待修改，根据重要参数，调整波动
-            add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.3))        # 每次添加的数据量
-            index = num_key_params.argsort()[::-1][:add_num]  # 重要参数最多的20%的
-            index = np.sort(index)
-            imp_seq_starts = self.seq_starts[index]
-            for imp_seq_start in imp_seq_starts:
-                if imp_seq_start-self.split[0] >= 0:
-                    self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[0])
-                if imp_seq_start+self.split[1] <= self.n_samples - self.seq_len + 1:
-                    self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[1])
-                if imp_seq_start-self.split[1] >= 0:
-                    self.seq_starts = np.append(self.seq_starts, imp_seq_start-self.split[1])
-                if imp_seq_start+self.split[0] <= self.n_samples - self.seq_len + 1:
-                    self.seq_starts = np.append(self.seq_starts, imp_seq_start+self.split[0])
-
-            self.seq_starts = np.sort(self.seq_starts)
-            self.seq_starts = np.unique(self.seq_starts, axis=0)
-            self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
-            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
-                                           shuffle=True, pin_memory=True)
         elif self.sample_selection == 5:        # ICLR21
             pass
 
@@ -567,7 +468,6 @@ class BaseDeepAD(metaclass=ABCMeta):
             for batch_x in self.train_loader:
                 _, error = self.inference_forward(batch_x, self.net, self.criterion)
                 train_loss_now = np.concatenate([train_loss_now, error.cpu().detach().numpy()])
-            self.loss_by_epoch[str(epoch)] = train_loss_now
             self.net.train()  # 使用完全的网络来计算
             self.train_loss_now = train_loss_now
 
@@ -576,9 +476,11 @@ class BaseDeepAD(metaclass=ABCMeta):
                 return
 
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
-            # save_num = int(self.save_rate * len(self.train_data))
-            delta = abs(self.train_loss_now - self.train_loss_past)
-            index1 = delta.argsort()[:save_num]
+            if epoch == 0:
+                index1 = np.array([])
+            else:
+                delta = abs(self.train_loss_now - self.train_loss_past)
+                index1 = delta.argsort()[:save_num]
             index2 = train_loss_now.argsort()[:save_num]
 
             index = np.concatenate([index1, index2])
@@ -589,6 +491,10 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.train_loss_past = self.train_loss_now[np.sort(index)]
             self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                       shuffle=True, pin_memory=True)
+
+            self.trainsets['dis' + str(epoch)] = train_loss_now
+            if epoch > 0:
+                self.trainsets['yseq' + str(epoch)] = self.trainsets['yseq' + str(epoch-1)][np.sort(index)]
 
         elif self.sample_selection == 7:        # 我的方法
             if len(self.train_data) >= int(self.n_samples // self.seq_len * 2):
@@ -618,7 +524,6 @@ class BaseDeepAD(metaclass=ABCMeta):
             else:
                 self.true_key_param = importance/len(self.seq_starts)
 
-            self.key_params_num_by_epoch[str(epoch)] = dis
             if epoch == 0:  # 第一轮只统计true_key_param，不进行筛选
                 self.trainsets['dis' + str(epoch)] = dis
             else:

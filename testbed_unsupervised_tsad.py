@@ -23,10 +23,6 @@ parser.add_argument("--runs", type=int, default=1,
                     help="how many times we repeat the experiments to obtain the average performance")
 parser.add_argument("--output_dir", type=str, default='@records/',
                     help="the output file path")
-parser.add_argument("--loss_dir", type=str, default='@losses/',
-                    help="the output file path")
-parser.add_argument("--key_params_num_dir", type=str, default='@key_params_num/',
-                    help="the output file path")
 parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
@@ -85,10 +81,6 @@ def main():
     result_file = os.path.join(args.output_dir, f'{args.model}.{args.flag}.csv')
     # # setting loss file/folder path
     funcs = ['norm', 'delta-min', 'abs-min', 'imp_param', "imp_param_adding", 'ICLM21', 'Arxiv22', 'myfunc']
-    loss_dir = f'{args.loss_dir}/{args.model}.{args.flag}/'
-    os.makedirs(loss_dir, exist_ok=True)
-    key_params_num_dir = f'{args.key_params_num_dir}/{args.model}.{args.flag}/'
-    os.makedirs(key_params_num_dir, exist_ok=True)
     trainsets_dir = f'{args.trainsets_dir}/{args.model}.{args.flag}/'
     os.makedirs(trainsets_dir, exist_ok=True)
 
@@ -152,18 +144,11 @@ def main():
                 t_lst.append(t)
 
                 if not args.silent_header:
-                    if args.sample_selection == 0 or args.sample_selection == 6:
-                        loss_df = pd.DataFrame.from_dict(clf.loss_by_epoch, orient='index').transpose()
-                        loss_df.to_csv(loss_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
-
-                    if args.sample_selection == 3 or args.sample_selection == 4 or args.sample_selection == 7:
-                        key_params_num_df = pd.DataFrame.from_dict(clf.key_params_num_by_epoch, orient='index').transpose()
-                        key_params_num_df.to_csv(key_params_num_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
-                        trainsets_df = pd.DataFrame.from_dict(clf.trainsets, orient='index').transpose()
-                        trainsets_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
+                    trainsets_df = pd.DataFrame.from_dict(clf.trainsets, orient='index').transpose()
+                    trainsets_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
                     if len(clf.result_detail) != 0:
                         df_result = pd.DataFrame(clf.result_detail, columns=['auc', 'pr', 'f1', 'adjauc', 'adjpr', 'adjf1'])
-                        df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{args.rate}.{i}.csv'))
+                        df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{funcs[args.sample_selection]}.{args.rate}.{i}.csv'))
 
             avg_entry = np.average(np.array(entries), axis=0)
             std_entry = np.std(np.array(entries), axis=0)
