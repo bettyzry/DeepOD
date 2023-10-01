@@ -91,12 +91,47 @@ def insert_pollution(train_data, test_data, labels, rate, seq_len):
     y_seqs = get_sub_seqs_label(labels, seq_len=seq_len, stride=1)
     oseqs = np.where(y_seqs == 1)[0]
     okinds = len(oseqs)
-    datasize = len(train_data)
-    onum = int(datasize*rate/seq_len)
-    ostarts = [random.randint(0, datasize-seq_len-1) for i in range(onum)]
-    train_labels = np.zeros(datasize)
+    datasize = int(len(train_data)/seq_len)
+    onum = int(datasize*rate)
+    ostarts = random.sample(range(0, datasize-1), onum)
+    train_labels = np.zeros(len(train_data))
     for ostart in ostarts:
         index = random.randint(0, okinds-1)
-        train_data[ostart: ostart+seq_len] += test_seq[index]
-        train_labels[ostart: ostart+seq_len] = 1
+        train_data[ostart*seq_len: (ostart+1)*seq_len] += test_seq[oseqs[index]]
+        train_labels[ostart*seq_len: (ostart+1)*seq_len] = 1
     return train_data, train_labels
+
+
+def insert_pollution_seq(test_data, labels, rate, seq_len):
+    ori_seq = get_sub_seqs(test_data, seq_len=seq_len, stride=1)
+    oriy_seq = get_sub_seqs_label(labels, seq_len=seq_len, stride=1)
+
+    split = 0.6
+    train_num = int(len(ori_seq)*split)
+    train_seq = ori_seq[:train_num]
+
+    oseqs = np.where(oriy_seq == 1)[0]
+    okinds = len(oseqs)
+
+    ii = 0
+    train_seq_o = []
+    train_labels = []
+    train_num_o = 3*train_num
+    while len(train_seq_o) <= train_num_o:
+        l = random.random()
+        if l <= rate:
+            oindex = random.randint(0, okinds-1)
+            train_seq_o.append(ori_seq[oseqs[oindex]])
+            train_labels.append(1)
+        else:
+            train_seq_o.append(train_seq[ii])
+            train_labels.append(0)
+            ii += 1
+            if ii == len(train_seq):
+                ii = 0
+    train_seq_o = np.array(train_seq_o)
+    train_labels = np.array(train_labels)
+
+    test_data = test_data[train_num:]
+    labels = labels[train_num:]
+    return train_seq_o, train_labels, test_data, labels

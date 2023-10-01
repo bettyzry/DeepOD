@@ -32,7 +32,7 @@ class TcnED(BaseDeepAD):
 
         return
 
-    def fit(self, X, y=None, Xtest=None, Ytest=None):
+    def fit(self, X, y=None, Xtest=None, Ytest=None, X_seqs=None, y_seqs=None):
         """
         Fit detector. y is ignored in unsupervised methods.
 
@@ -51,24 +51,24 @@ class TcnED(BaseDeepAD):
             Fitted estimator.
         """
         if self.data_type == 'ts':
-            if self.sample_selection == 4 or self.sample_selection == 7:
-                self.ori_data = X
-                self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)     # 无重叠计算seq
-                self.trainsets['seqstarts0'] = self.seq_starts
-                X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
-                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
-                self.train_data = X_seqs
-                self.train_label = y_seqs
-                if self.train_label is not None:
-                    self.trainsets['yseq0'] = self.train_label
-                    self.ori_label = y
-                self.n_samples, self.n_features = X.shape
+            if X_seqs is not None and y_seqs is not None:
+                pass
             else:
-                X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
-                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
-                self.train_data = X_seqs
-                self.train_label = y_seqs
-                self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
+                if self.sample_selection == 4 or self.sample_selection == 7:
+                    self.ori_data = X
+                    self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)     # 无重叠计算seq
+                    self.trainsets['seqstarts0'] = self.seq_starts
+                    X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
+                    y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
+                else:
+                    X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+                    y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
+            self.train_data = X_seqs
+            self.train_label = y_seqs
+            self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
+            if self.train_label is not None:
+                self.trainsets['yseq0'] = self.train_label
+                self.ori_label = y
         else:
             self.train_data = X
             self.train_label = y

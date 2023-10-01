@@ -455,6 +455,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                 _, losses = self.inference_forward(batch_x, self.net, self.criterion)
                 train_loss_now = np.concatenate([train_loss_now, losses.cpu().detach().numpy()])
             self.loss_by_epoch[str(epoch)] = train_loss_now
+            self.trainsets['dis' + str(epoch)] = train_loss_now
             self.net.train()  # 使用完全的网络来计算
 
         elif self.sample_selection == 3:        # 保留重要参数多的数据，待提速

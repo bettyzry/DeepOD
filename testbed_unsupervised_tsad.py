@@ -14,7 +14,7 @@ import numpy as np
 from testbed.utils import import_ts_data_unsupervised
 from deepod.metrics import ts_metrics, point_adjustment
 import pandas as pd
-from deepod.utils.utility import insert_pollution
+from deepod.utils.utility import insert_pollution, insert_pollution_seq
 
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
 
@@ -31,7 +31,8 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='ASD',
+                    default='ASD,SWaT_cut,DASADS,EP',
+
                     help='ASD,SMAP,MSL,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                          'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     )
@@ -53,7 +54,7 @@ parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
 parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
-parser.add_argument('--rate', type=float, default=0.2)              # 污染率
+parser.add_argument('--rate', type=float, default=0.8)              # 污染率
 args = parser.parse_args()
 
 # rate_list = [0, 0.01, 0.02, 0.1, 0.15, 0.2]
@@ -105,6 +106,7 @@ def main():
         print(f'data, adj_auroc, std, adj_ap, std, adj_f1, std, adj_p, std, adj_r, std, time, model', file=f)
         f.close()
         print('write')
+        print(args.rate, args.sample_selection)
 
     dataset_name_lst = args.dataset.split(',')
 
@@ -118,7 +120,8 @@ def main():
         entity_metric_lst = []
         entity_metric_std_lst = []
         for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
-            train_data, train_labels = insert_pollution(train_data, test_data, labels, args.rate, args.seq_len)
+            # train_data, train_labels = insert_pollution(train_data, test_data, labels, args.rate, args.seq_len)
+            train_seq_o, train_labels, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
             entries = []
             t_lst = []
             for i in range(args.runs):
@@ -127,7 +130,8 @@ def main():
                 t1 = time.time()
                 clf = model_class(**model_configs, random_state=42+i)
                 clf.sample_selection = args.sample_selection
-                clf.fit(train_data, train_labels, test_data, labels)
+                clf.fit(None, None, test_data, labels, train_seq_o, train_labels)
+                # clf.fit(train_data, train_labels, test_data, labels)
                 # clf.fit(test_data, labels)
                 # clf.fit(train_data, None, test_data, labels)
                 t = time.time() - t1
@@ -188,4 +192,9 @@ if __name__ == '__main__':
     #     args.sample_selection = i
     #     # args.runs = 1
     #     main()
+    # for rate in [0, 0.2, 0.4, 0.6, 0.8]:
+    #     print(rate)
+    #     args.rate = rate
+    #     main()
+    args.rate = 0
     main()
