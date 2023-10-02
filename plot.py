@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import time
 from sklearn.metrics import f1_score
 from scipy.spatial.distance import pdist
-from deepod.metrics import ts_metrics, point_adjustment
+from deepod.metrics import ts_metrics, point_adjustment, point_adjustment_min
 import seaborn as sns
 from deepod.utils.utility import get_sub_seqs_label
 from testbed.utils import import_ts_data_unsupervised
@@ -21,35 +21,21 @@ def zscore(x):
 
 def plot_loss_distribution():
     fillname = 'ASD'     # 'MSL_combined'
-    step = 0
-    data_root = '/home/xuhz/zry/DeepOD-new/@losses/TimesNet./%s_combined_norm0-T.csv' % fillname
-
-    step = str(step)
-    data_pkg = import_ts_data_unsupervised(dataset_root,
-                                           fillname, entities='FULL',
-                                           combine=1)
-    train_lst, test_lst, label_lst, name_lst = data_pkg
-    y = label_lst[0]
-    y_seqs = get_sub_seqs_label(y, seq_len=30, stride=1)
+    step = 100
+    data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TcnED./%s_combined_norm0.80.csv' % fillname
     df = pd.read_csv(data_root)
-    df = df.fillna(0)
-    new_df = pd.DataFrame()
+    step = str(step)
 
-    y_seqs = y_seqs[:len(df[step].values)]
-    new_df['label'] = y_seqs
-    new_df['loss'] = df[step].values
-    adjloss = point_adjustment(y_seqs, df[step].values)
-    new_df['adjloss'] = adjloss
-    random_loss = [random.random() for i in range(len(df[step].values))]
-    new_df['random_loss'] = random_loss
+    adjloss = point_adjustment(df['yseq0'].values, df['loss'+step].values)
+    df['adjloss'] = adjloss
 
-    new_df.to_csv(data_root[:-4] + 'T.csv')
-    true = new_df[new_df.label == 0]
-    false = new_df[new_df.label == 1]
+
+    true = df[df.yseq0 == 0]
+    false = df[df.yseq0 == 1]
 
     # 绘制多个变量的密度分布图
-    sns.kdeplot(true['loss'], shade=True, color="r", label='Clean')
-    sns.kdeplot(false['loss'], shade=True, color="b", label='Polluted')
+    sns.kdeplot(true['loss'+step], shade=True, color="r", label='Clean')
+    sns.kdeplot(false['loss'+step], shade=True, color="b", label='Polluted')
     plt.legend()
     plt.show()
 
@@ -61,6 +47,55 @@ def plot_loss_distribution():
     # sns.kdeplot(true['random_loss'], shade=True, color="r")
     # sns.kdeplot(false['random_loss'], shade=True, color="b")
     # plt.show()
+
+
+def plot_dis_distribution():
+    fillname = 'ASD'     # 'MSL_combined'
+    step = 0
+    data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TcnED./%s_combined_myfunc-addo0.20.csv' % fillname
+
+    df = pd.read_csv(data_root)
+    adjdis = point_adjustment(df['yseq0'].values, df['dis1'].values)
+    df['adjdis'] = adjdis
+    adjval = point_adjustment_min(df['yseq0'].values, df['value0'].values)
+    df['adjval'] = adjval
+    adjnum = point_adjustment_min(df['yseq0'].values, df['num0'].values)
+    df['adjnum'] = adjnum
+
+    true = df[df.yseq0 == 0]
+    false = df[df.yseq0 == 1]
+
+    # 绘制多个变量的密度分布图
+    sns.kdeplot(true['dis1'], shade=True, color="r", label='Clean')
+    sns.kdeplot(false['dis1'], shade=True, color="b", label='Polluted')
+    plt.legend()
+    plt.show()
+
+    sns.kdeplot(true['adjdis'], shade=True, color="r", label='Clean')
+    sns.kdeplot(false['adjdis'], shade=True, color="b", label='Polluted')
+    plt.legend()
+    plt.show()
+
+    sns.kdeplot(true['value0'], shade=True, color="r", label='Clean')
+    sns.kdeplot(false['value0'], shade=True, color="b", label='Polluted')
+    plt.legend()
+    plt.show()
+
+    sns.kdeplot(true['adjval'], shade=True, color="r", label='Clean')
+    sns.kdeplot(false['adjval'], shade=True, color="b", label='Polluted')
+    plt.legend()
+    plt.show()
+
+    sns.kdeplot(true['num0'], shade=True, color="r", label='Clean')
+    sns.kdeplot(false['num0'], shade=True, color="b", label='Polluted')
+    plt.legend()
+    plt.show()
+
+    sns.kdeplot(true['adjnum'], shade=True, color="r", label='Clean')
+    sns.kdeplot(false['adjnum'], shade=True, color="b", label='Polluted')
+    plt.legend()
+    plt.show()
+
 
 
 def plot_dloss_distribution():
@@ -161,17 +196,20 @@ def plotT(data_root, step):
 
 
 def pollution_rate():
+    func = 'adjf1'
     for rate in [0, 0.2, 0.4, 0.6, 0.8]:
-        data_root = '/home/xuhz/zry/DeepOD-new/@records/TcnED.SWaT_cut.%s.0.csv' % str(rate)
+        data_root = '/home/xuhz/zry/DeepOD-new/@records/TcnED.SWaT_cut.norm.%s.0.csv' % str(rate)
         df = pd.read_csv(data_root)
-        y = df['adjf1'].values
+        y = df[func].values
         plt.plot(y, label=str(rate))
     plt.legend()
+    plt.title(func)
     plt.show()
 
 
 if __name__ == '__main__':
     # plot_loss_distribution()
+    # plot_dis_distribution()
     pollution_rate()
     # data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TranAD./%s_combined_myfunc0.csv' % fillname
     # plotT(data_root, step)

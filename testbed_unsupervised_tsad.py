@@ -14,7 +14,7 @@ import numpy as np
 from testbed.utils import import_ts_data_unsupervised
 from deepod.metrics import ts_metrics, point_adjustment
 import pandas as pd
-from deepod.utils.utility import insert_pollution, insert_pollution_seq
+from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new
 
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
 
@@ -80,7 +80,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     result_file = os.path.join(args.output_dir, f'{args.model}.{args.flag}.csv')
     # # setting loss file/folder path
-    funcs = ['norm', 'delta-min', 'abs-min', 'imp_param', "imp_param_adding", 'ICLM21', 'Arxiv22', 'myfunc']
+    funcs = ['norm', 'myfunc-addo', None, None, None, 'ICLM21', 'Arxiv22', 'myfunc']
     trainsets_dir = f'{args.trainsets_dir}/{args.model}.{args.flag}/'
     os.makedirs(trainsets_dir, exist_ok=True)
 
@@ -113,7 +113,8 @@ def main():
         entity_metric_std_lst = []
         for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
             # train_data, train_labels = insert_pollution(train_data, test_data, labels, args.rate, args.seq_len)
-            train_seq_o, train_labels, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
+            # train_data, train_labels, test_data, labels = insert_pollution_new(test_data, labels, args.rate)
+            train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
             entries = []
             t_lst = []
             for i in range(args.runs):
@@ -122,10 +123,9 @@ def main():
                 t1 = time.time()
                 clf = model_class(**model_configs, random_state=42+i)
                 clf.sample_selection = args.sample_selection
-                clf.fit(None, None, test_data, labels, train_seq_o, train_labels)
+                clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
                 # clf.fit(train_data, train_labels, test_data, labels)
                 # clf.fit(test_data, labels)
-                # clf.fit(train_data, None, test_data, labels)
                 t = time.time() - t1
 
                 scores = clf.decision_function(test_data)
@@ -145,7 +145,7 @@ def main():
 
                 if not args.silent_header:
                     trainsets_df = pd.DataFrame.from_dict(clf.trainsets, orient='index').transpose()
-                    trainsets_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(i)+'.csv', index=False)
+                    trainsets_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(args.rate) + str(i)+'.csv', index=False)
                     if len(clf.result_detail) != 0:
                         df_result = pd.DataFrame(clf.result_detail, columns=['auc', 'pr', 'f1', 'adjauc', 'adjpr', 'adjf1'])
                         df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{funcs[args.sample_selection]}.{args.rate}.{i}.csv'))
@@ -181,5 +181,5 @@ if __name__ == '__main__':
     #     print(rate)
     #     args.rate = rate
     #     main()
-    args.rate = 0
+    args.rate = 0.8
     main()

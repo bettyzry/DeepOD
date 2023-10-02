@@ -102,6 +102,46 @@ def insert_pollution(train_data, test_data, labels, rate, seq_len):
     return train_data, train_labels
 
 
+def insert_pollution_new(test_data, labels, rate):
+    splits = np.where(labels[1:] != labels[:-1])[0] + 1
+    splits = np.concatenate([[0], splits])
+    is_anomaly = labels[0] == 1
+    data_splits = [test_data[sp: splits[ii+1]] for ii, sp in enumerate(splits[:-1])]
+    outliers = [data_splits[ii] for ii, sp in enumerate(data_splits) if ii % 2 != is_anomaly]
+
+    split = 0.6
+    train_num = int(len(test_data)*split)
+    train_data = test_data[:train_num]
+    train_l = labels[:train_num]
+
+    ii = 0
+    train_data_o = np.array([])
+    train_labels = np.array([])
+    train_num_o = train_num
+    while len(train_data_o) <= train_num_o:
+        N = len(train_data_o)
+        No = sum(train_labels)
+        if N == 0:
+            oindex = random.randint(0, len(outliers)-1)
+            train_data_o = outliers[oindex]
+            train_labels = np.ones(len(outliers[oindex]))
+        elif No/N <= rate:
+            oindex = random.randint(0, len(outliers)-1)
+            train_data_o = np.insert(train_data_o, N, outliers[oindex], axis=0)
+            train_labels = np.concatenate([train_labels, np.ones(len(outliers[oindex]))])
+        else:       # 插入异常,把一整个序列装进去
+            while train_l[ii % len(train_l)] == 1:
+                ii += 1
+            train_data_o = np.insert(train_data_o, N, train_data[ii], axis=0)
+            train_labels = np.concatenate([train_labels, [0]])
+            ii += 1
+
+
+    test_data = test_data[train_num:]
+    labels = labels[train_num:]
+    return train_data_o, train_labels, test_data, labels
+
+
 def insert_pollution_seq(test_data, labels, rate, seq_len):
     ori_seq = get_sub_seqs(test_data, seq_len=seq_len, stride=1)
     oriy_seq = get_sub_seqs_label(labels, seq_len=seq_len, stride=1)
@@ -109,6 +149,7 @@ def insert_pollution_seq(test_data, labels, rate, seq_len):
     split = 0.6
     train_num = int(len(ori_seq)*split)
     train_seq = ori_seq[:train_num]
+    train_l = oriy_seq[:train_num]
 
     oseqs = np.where(oriy_seq == 1)[0]
     okinds = len(oseqs)
@@ -116,19 +157,19 @@ def insert_pollution_seq(test_data, labels, rate, seq_len):
     ii = 0
     train_seq_o = []
     train_labels = []
-    train_num_o = 3*train_num
+    train_num_o = train_num
     while len(train_seq_o) <= train_num_o:
         l = random.random()
-        if l <= rate:
+        if l <= rate:       # 插入异常
             oindex = random.randint(0, okinds-1)
             train_seq_o.append(ori_seq[oseqs[oindex]])
             train_labels.append(1)
-        else:
-            train_seq_o.append(train_seq[ii])
+        else:               # 插入正常
+            while train_l[ii % len(train_l)] == 1:
+                ii += 1
+            train_seq_o.append(train_seq[ii % len(train_l)])
             train_labels.append(0)
             ii += 1
-            if ii == len(train_seq):
-                ii = 0
     train_seq_o = np.array(train_seq_o)
     train_labels = np.array(train_labels)
 

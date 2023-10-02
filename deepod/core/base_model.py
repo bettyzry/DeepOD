@@ -23,6 +23,7 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import f1_score
 from scipy.spatial.distance import pdist
 from sklearn.preprocessing import normalize
+import torch.nn.functional as F
 
 
 class BaseDeepAD(metaclass=ABCMeta):
@@ -518,13 +519,9 @@ class BaseDeepAD(metaclass=ABCMeta):
                     dis[ii*self.batch_size: (ii+1)*self.batch_size] = np.linalg.norm(self.true_key_param-metric, axis=1) # L2范数
             self.net.train()
 
+            self.true_key_param = importance[self.param_musk] / len(self.train_data)
             if epoch == 0:
                 self.param_musk = np.sort(importance.argsort()[:10000])     # 前10000个最重要的数据
-                self.true_key_param = importance[self.param_musk]/len(self.seq_starts)
-            else:
-                self.true_key_param = importance/len(self.seq_starts)
-
-            if epoch == 0:  # 第一轮只统计true_key_param，不进行筛选
                 self.trainsets['dis' + str(epoch)] = dis
             else:
                 # 待修改，根据重要参数，调整波动
@@ -536,7 +533,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                 delet_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.2))        # 每次添加的数据量
                 index = dis.argsort()[::-1][:delet_num]  # 删除距离最大的20%
                 index = np.sort(index)
-                self.seq_starts = np.delete(self.seq_starts, index)
+                self.seq_starts = np.delete(self.seq_starts, index, axis=0)
 
                 for add_seq_start in add_seq_starts:
                     if add_seq_start-self.split[0] >= 0:
@@ -559,6 +556,51 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.trainsets['yseq' + str(epoch)] = y_seqs
                 self.trainsets['dis' + str(epoch)] = dis
 
+        elif self.sample_selection == 1:        # 我的方法 特别测试
+            if len(self.train_data) <= int(self.n_samples * 0.5):
+                return
+
+            dis = np.zeros(len(self.train_data))
+            value = np.zeros(len(self.train_data))
+            num = np.zeros(len(self.train_data))
+            importance = None
+            self.net.eval()
+            for ii, batch_x in enumerate(self.train_loader):
+                metric = self.get_importance_ICLR21(batch_x, epoch, ii)
+                # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
+
+                if ii == 0:
+                    importance = np.sum(metric, axis=0)
+                    thresh = importance[importance.argsort()[int(len(importance) * 0.4)]]/self.batch_size
+                else:
+                    importance = importance + np.sum(metric, axis=0)
+
+                if epoch != 0:  # 非第一轮迭代，计算距离
+                    dis[ii*self.batch_size: (ii+1)*self.batch_size] = np.linalg.norm(self.true_key_param-metric, axis=1) # L2范数
+                    # num[ii*self.batch_size: (ii+1)*self.batch_size] = metric
+                value[ii*self.batch_size: (ii+1)*self.batch_size] = np.sum(metric, axis=1)
+                num[ii*self.batch_size: (ii+1)*self.batch_size] = [sum(m > thresh) for m in metric]
+            self.net.train()
+
+            if epoch == 0:
+                self.param_musk = np.sort(importance.argsort()[:10000])     # 前10000个最重要的数据
+            else:
+                # 待修改，根据重要参数，调整波动
+                delet_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.2))        # 每次删除的数据量
+                index = dis.argsort()[::-1][:delet_num]  # 删除距离最大的20%
+                self.train_data = np.delete(self.train_data, index, axis=0)         # 删除指定行
+                self.train_label = np.delete(self.train_label, index, axis=0)
+
+                self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
+                                               shuffle=True, pin_memory=True)
+
+                self.trainsets['yseq' + str(epoch)] = self.train_label
+
+            importance = importance[self.param_musk]
+            self.true_key_param = importance/len(self.train_data)
+            self.trainsets['dis' + str(epoch)] = dis
+            self.trainsets['value' + str(epoch)] = value
+            self.trainsets['num' + str(epoch)] = num
         else:
             print('ERROR')
 
@@ -584,10 +626,14 @@ class BaseDeepAD(metaclass=ABCMeta):
             g_loss = grad(loss, self.params, create_graph=True, allow_unused=True)
             gv = torch.cat([g.view(-1) for g in g_loss]).cpu().detach().numpy()
             if self.param_musk is not None:
-                gv = gv[self.param_musk]  # 只保留最重要的万个参数
+                gv = gv[self.param_musk]    # 只保留最重要的万个参数
+
             gv_metric.append(gv)
-        metric = gv_metric * self.all_v
-        metric = normalize(metric, axis=0, norm='l1')
+        metric = abs(gv_metric * self.all_v)
+        mean = np.mean(metric, axis=0)
+        # metric = metric / mean      # 按列归一化
+        metric = np.divide(metric, mean, out=np.zeros_like(metric, dtype=np.float64), where=mean != 0)
+        metric = normalize(metric, axis=1, norm='l2')   # 对metric按行进行归一化
         return metric
 
     def get_importance_ICML17(self, batch_x, epoch, ii):
