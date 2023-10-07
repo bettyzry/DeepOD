@@ -14,12 +14,12 @@ import numpy as np
 from testbed.utils import import_ts_data_unsupervised
 from deepod.metrics import ts_metrics, point_adjustment
 import pandas as pd
-from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new
+from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution
 
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--runs", type=int, default=1,
+parser.add_argument("--runs", type=int, default=5,
                     help="how many times we repeat the experiments to obtain the average performance")
 parser.add_argument("--output_dir", type=str, default='@records/',
                     help="the output file path")
@@ -27,8 +27,8 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='ASD,SWaT_cut,DASADS,EP',
-
+                    default='ASD,SMAP,MSL,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
+                         'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault',
                     help='ASD,SMAP,MSL,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                          'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     )
@@ -49,8 +49,8 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
-parser.add_argument('--rate', type=float, default=0.8)              # 污染率
+parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
+parser.add_argument('--rate', type=float, default=0)              # 污染率
 args = parser.parse_args()
 
 # rate_list = [0, 0.01, 0.02, 0.1, 0.15, 0.2]
@@ -115,6 +115,7 @@ def main():
             # train_data, train_labels = insert_pollution(train_data, test_data, labels, args.rate, args.seq_len)
             # train_data, train_labels, test_data, labels = insert_pollution_new(test_data, labels, args.rate)
             train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
+            # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
             entries = []
             t_lst = []
             for i in range(args.runs):
@@ -125,6 +126,7 @@ def main():
                 clf.sample_selection = args.sample_selection
                 clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
                 # clf.fit(train_data, train_labels, test_data, labels)
+                # clf.fit(train_data, None, test_data, labels)
                 # clf.fit(test_data, labels)
                 t = time.time() - t1
 
@@ -172,14 +174,25 @@ def main():
 
 
 if __name__ == '__main__':
-    # for i in [0, 5, 6]:        # 0, 5, 6, 7
+    # for i in [7]:        # 0, 5, 6, 7
     #     print(i)
     #     args.sample_selection = i
     #     # args.runs = 1
     #     main()
+
     # for rate in [0, 0.2, 0.4, 0.6, 0.8]:
     #     print(rate)
     #     args.rate = rate
+    #     args.runs = 1
+    #     args.sample_selection=0
     #     main()
-    args.rate = 0.8
+
+    # args.rate = 0
+    args.runs = 1
+    args.sample_selection=0
     main()
+
+    # args.rate = 0.1
+    # args.sample_selection = 1
+    # args.runs = 0
+    # main()

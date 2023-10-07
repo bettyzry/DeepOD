@@ -50,52 +50,55 @@ def plot_loss_distribution():
 
 
 def plot_dis_distribution():
-    fillname = 'ASD'     # 'MSL_combined'
+    fillname = 'DASADS'     # 'MSL_combined'
     step = 0
-    data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TcnED./%s_combined_myfunc-addo0.20.csv' % fillname
+    data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TcnED./%s_combined_myfunc-addo0.10.csv' % fillname
 
     df = pd.read_csv(data_root)
-    adjdis = point_adjustment(df['yseq0'].values, df['dis1'].values)
+    adjdis = point_adjustment(df['yseq'+str(step)].values, df['dis'+str(step+1)].values)
     df['adjdis'] = adjdis
-    adjval = point_adjustment_min(df['yseq0'].values, df['value0'].values)
+    adjval = point_adjustment_min(df['yseq'+str(step)].values, df['value'+str(step)].values)
     df['adjval'] = adjval
-    adjnum = point_adjustment_min(df['yseq0'].values, df['num0'].values)
+    adjnum = point_adjustment_min(df['yseq'+str(step)].values, df['num'+str(step)].values)
     df['adjnum'] = adjnum
 
     true = df[df.yseq0 == 0]
     false = df[df.yseq0 == 1]
 
     # 绘制多个变量的密度分布图
-    sns.kdeplot(true['dis1'], shade=True, color="r", label='Clean')
-    sns.kdeplot(false['dis1'], shade=True, color="b", label='Polluted')
-    plt.legend()
-    plt.show()
+    # sns.kdeplot(true['dis'+str(step+1)], shade=True, color="r", label='Clean')
+    # sns.kdeplot(false['dis'+str(step+1)], shade=True, color="b", label='Polluted')
+    # plt.legend()
+    # plt.show()
 
-    sns.kdeplot(true['adjdis'], shade=True, color="r", label='Clean')
-    sns.kdeplot(false['adjdis'], shade=True, color="b", label='Polluted')
-    plt.legend()
-    plt.show()
+    eval_metrics = ts_metrics(df['yseq'+str(step)].values, df['dis'+str(step+1)].values)
+    txt = ', '.join(['%.4f' % a for a in eval_metrics])
+    print(txt)
 
-    sns.kdeplot(true['value0'], shade=True, color="r", label='Clean')
-    sns.kdeplot(false['value0'], shade=True, color="b", label='Polluted')
-    plt.legend()
-    plt.show()
-
-    sns.kdeplot(true['adjval'], shade=True, color="r", label='Clean')
-    sns.kdeplot(false['adjval'], shade=True, color="b", label='Polluted')
-    plt.legend()
-    plt.show()
-
-    sns.kdeplot(true['num0'], shade=True, color="r", label='Clean')
-    sns.kdeplot(false['num0'], shade=True, color="b", label='Polluted')
-    plt.legend()
-    plt.show()
-
-    sns.kdeplot(true['adjnum'], shade=True, color="r", label='Clean')
-    sns.kdeplot(false['adjnum'], shade=True, color="b", label='Polluted')
-    plt.legend()
-    plt.show()
-
+    # sns.kdeplot(true['adjdis'], shade=True, color="r", label='Clean')
+    # sns.kdeplot(false['adjdis'], shade=True, color="b", label='Polluted')
+    # plt.legend()
+    # plt.show()
+    #
+    # sns.kdeplot(true['value'+str(step)], shade=True, color="r", label='Clean')
+    # sns.kdeplot(false['value'+str(step)], shade=True, color="b", label='Polluted')
+    # plt.legend()
+    # plt.show()
+    #
+    # sns.kdeplot(true['adjval'], shade=True, color="r", label='Clean')
+    # sns.kdeplot(false['adjval'], shade=True, color="b", label='Polluted')
+    # plt.legend()
+    # plt.show()
+    #
+    # sns.kdeplot(true['num'+str(step)], shade=True, color="r", label='Clean')
+    # sns.kdeplot(false['num'+str(step)], shade=True, color="b", label='Polluted')
+    # plt.legend()
+    # plt.show()
+    #
+    # sns.kdeplot(true['adjnum'], shade=True, color="r", label='Clean')
+    # sns.kdeplot(false['adjnum'], shade=True, color="b", label='Polluted')
+    # plt.legend()
+    # plt.show()
 
 
 def plot_dloss_distribution():
@@ -196,14 +199,19 @@ def plotT(data_root, step):
 
 
 def pollution_rate():
-    func = 'adjf1'
-    for rate in [0, 0.2, 0.4, 0.6, 0.8]:
-        data_root = '/home/xuhz/zry/DeepOD-new/@records/TcnED.SWaT_cut.norm.%s.0.csv' % str(rate)
+    func = 'adjauc'
+    # rates = [0.0, 0.1, 0.2, 0.3, 0.4]
+    rates = [0.0, 0.2, 0.4, 0.6, 0.8]
+    runs = 0
+    for ii, rate in enumerate(rates):
+        data_root = '/home/xuhz/zry/DeepOD-new/@records/TranAD.EP.norm.%s.%s.csv' % (str(rate), str(runs))
         df = pd.read_csv(data_root)
         y = df[func].values
         plt.plot(y, label=str(rate))
     plt.legend()
-    plt.title(func)
+    plt.xlabel('epoch')
+    plt.ylabel(func)
+    plt.title('TranAD.EP')
     plt.show()
 
 

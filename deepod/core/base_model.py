@@ -152,7 +152,8 @@ class BaseDeepAD(metaclass=ABCMeta):
 
         self.sample_selection = sample_selection
         self.save_rate = 0.8
-        self.add_rate = 0.1
+        self.add_rate = 0.3
+        self.del_rate = 0.1
         self.train_loss_now = None
         self.train_loss_past = None
         self.thresh = 4e-6
@@ -498,7 +499,9 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.trainsets['yseq' + str(epoch)] = self.trainsets['yseq' + str(epoch-1)][np.sort(index)]
 
         elif self.sample_selection == 7:        # 我的方法
-            if len(self.train_data) >= int(self.n_samples // self.seq_len * 2):
+            # if len(self.train_data) >= int(self.n_samples // self.seq_len * 2):
+            #     return
+            if epoch >= 10:
                 return
 
             dis = np.zeros(len(self.train_data))
@@ -530,7 +533,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                 index = np.sort(index)
                 add_seq_starts = self.seq_starts[index]
 
-                delet_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.2))        # 每次添加的数据量
+                delet_num = min(int(self.del_rate * len(self.train_data)), int(self.n_samples * 0.2))        # 每次添加的数据量
                 index = dis.argsort()[::-1][:delet_num]  # 删除距离最大的20%
                 index = np.sort(index)
                 self.seq_starts = np.delete(self.seq_starts, index, axis=0)
@@ -566,7 +569,8 @@ class BaseDeepAD(metaclass=ABCMeta):
             importance = None
             self.net.eval()
             for ii, batch_x in enumerate(self.train_loader):
-                metric = self.get_importance_ICLR21(batch_x, epoch, ii)
+                # metric = self.get_importance_ICLR21(batch_x, epoch, ii)
+                metric = self.get_importance_dL(batch_x, epoch, ii)
                 # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
 
                 if ii == 0:
@@ -603,6 +607,33 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.trainsets['num' + str(epoch)] = num
         else:
             print('ERROR')
+
+    def get_importance_dL(self, batch_x, epoch, ii):
+        _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+        gv_metric = []
+
+        if epoch == 0 and ii == 0:             # 是第一个batch，更新all_v
+            params = [p for p in self.net.parameters() if p.requires_grad]
+            loss = losses[0]
+            g_loss = grad(loss, params, create_graph=True, allow_unused=True)
+            for jj, g in enumerate(g_loss):
+                if g is not None:
+                    self.params.append(params[jj])
+
+        for jj, loss in enumerate(losses):
+            # 有提速空间 #
+            g_loss = grad(loss, self.params, create_graph=True, allow_unused=True)
+            gv = torch.cat([g.view(-1) for g in g_loss]).cpu().detach().numpy()
+            if self.param_musk is not None:
+                gv = gv[self.param_musk]    # 只保留最重要的万个参数
+
+            gv_metric.append(abs(gv))
+
+        mean = np.mean(gv_metric, axis=0)
+        # metric = metric / mean      # 按列归一化
+        metric = np.divide(gv_metric, mean, out=np.zeros_like(gv_metric, dtype=np.float64), where=mean != 0)
+        metric = normalize(metric, axis=1, norm='l2')   # 对metric按行进行归一化
+        return metric
 
     def get_importance_ICLR21(self, batch_x, epoch, ii):
         _, losses = self.inference_forward(batch_x, self.net, self.criterion)
@@ -681,6 +712,24 @@ class BaseDeepAD(metaclass=ABCMeta):
         return metric
 
     def s_test(self, z_train, batch_x, damp=0.01, scale=25.0,
+               recursion_depth=5000):
+        self.net.eval()
+        z_train = self.train_loader.collate_fn([z_train])
+        _, loss = self.inference_forward(z_train, self.net, self.criterion)
+        v = list(grad(loss, self.params, create_graph=True))
+        h_estimate = v.copy()
+        for i in range(recursion_depth):
+            _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+            loc = np.random.randint(len(batch_x))
+            loss = losses[loc]
+            hv = self.hvp(loss, self.params, h_estimate)
+            # Recursively caclulate h_estimate  递归计算 求逆
+            h_estimate = [
+                _v + (1 - damp) * _h_e - _hv / scale
+                for _v, _h_e, _hv in zip(v, h_estimate, hv)]
+        return h_estimate
+
+    def s_test_old(self, z_train, batch_x, damp=0.01, scale=25.0,
                recursion_depth=5000):
         """s_test can be precomputed for each test point of interest, and then
         multiplied with grad_z to get the desired value for each training point.
