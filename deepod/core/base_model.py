@@ -6,6 +6,7 @@ some functions are adapted from the pyod library
 """
 
 import numpy as np
+import pandas as pd
 import torch
 import random
 import time
@@ -152,7 +153,7 @@ class BaseDeepAD(metaclass=ABCMeta):
 
         self.sample_selection = sample_selection
         self.save_rate = 0.8
-        self.add_rate = 0.3
+        self.add_rate = 0.5
         self.del_rate = 0.1
         self.train_loss_now = None
         self.train_loss_past = None
@@ -168,6 +169,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.all_v = None
         self.trainsets = {}
         self.result_detail = []
+        self.g_detail = {}
         return
 
     def fit(self, X, y=None):
@@ -495,68 +497,84 @@ class BaseDeepAD(metaclass=ABCMeta):
                                       shuffle=True, pin_memory=True)
 
             self.trainsets['dis' + str(epoch)] = train_loss_now
-            if epoch > 0:
+            if epoch > 0 and self.train_label is not None:
                 self.trainsets['yseq' + str(epoch)] = self.trainsets['yseq' + str(epoch-1)][np.sort(index)]
 
         elif self.sample_selection == 7:        # 我的方法
-            # if len(self.train_data) >= int(self.n_samples // self.seq_len * 2):
-            #     return
             if epoch >= 10:
                 return
 
-            dis = np.zeros(len(self.train_data))
+            # dis = np.zeros(len(self.train_data))
             importance = None
+            metrics = np.array([])
             self.net.eval()
             for ii, batch_x in enumerate(self.train_loader):
+                # metric = self.get_importance_dL(batch_x, epoch, ii)
                 metric = self.get_importance_ICLR21(batch_x, epoch, ii)
                 # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
 
-                if ii == 0:
-                    importance = np.sum(metric, axis=0)
+                if epoch == 0:
+                    if ii == 0:
+                        importance = np.sum(metric, axis=0)
+                    else:
+                        importance = importance + np.sum(metric, axis=0)
                 else:
-                    importance = importance + np.sum(metric, axis=0)
+                    if ii == 0:
+                        metrics = metric
+                    else:
+                        metrics = np.concatenate((metrics, metric), axis=0)
 
-                if epoch == 0:      # 只累计importance
-                    pass
-                else:
-                    dis[ii*self.batch_size: (ii+1)*self.batch_size] = np.linalg.norm(self.true_key_param-metric, axis=1) # L2范数
+                #
+                # if epoch == 0:      # 只累计importance
+                #     pass
+                # else:
+                #     dis[ii*self.batch_size: (ii+1)*self.batch_size] = np.linalg.norm(self.true_key_param-metric, axis=1) # L2范数
             self.net.train()
 
-            self.true_key_param = importance[self.param_musk] / len(self.train_data)
             if epoch == 0:
                 self.param_musk = np.sort(importance.argsort()[:10000])     # 前10000个最重要的数据
-                self.trainsets['dis' + str(epoch)] = dis
+                self.true_key_param = importance[self.param_musk] / len(self.train_data)
             else:
-                # 待修改，根据重要参数，调整波动
-                add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.4))        # 每次添加的数据量
+                importance = np.sum(metrics, axis=0) / len(self.train_data)
+                self.true_key_param = importance
+                dis = np.linalg.norm(importance - metrics, axis=1, ord=np.Inf)
+
+                # metrics = np.insert(metrics, 0, self.train_label, axis=1)
+                # df = pd.DataFrame(metrics)
+                # df.to_csv('@g_detail/TcnED-DASADS-ICLR21-ori/%s.csv' % str(epoch))
+
+                add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.4))  # 每次添加的数据量
                 index = dis.argsort()[:add_num]  # 扩展距离最小的40%
                 index = np.sort(index)
                 add_seq_starts = self.seq_starts[index]
 
-                delet_num = min(int(self.del_rate * len(self.train_data)), int(self.n_samples * 0.2))        # 每次添加的数据量
+                delet_num = min(int(self.del_rate * len(self.train_data)), int(self.n_samples * 0.2))  # 每次添加的数据量
                 index = dis.argsort()[::-1][:delet_num]  # 删除距离最大的20%
                 index = np.sort(index)
                 self.seq_starts = np.delete(self.seq_starts, index, axis=0)
 
                 for add_seq_start in add_seq_starts:
-                    if add_seq_start-self.split[0] >= 0:
-                        self.seq_starts = np.append(self.seq_starts, add_seq_start-self.split[0])
-                    if add_seq_start+self.split[1] <= self.n_samples - self.seq_len + 1:
-                        self.seq_starts = np.append(self.seq_starts, add_seq_start+self.split[1])
-                    if add_seq_start-self.split[1] >= 0:
-                        self.seq_starts = np.append(self.seq_starts, add_seq_start-self.split[1])
-                    if add_seq_start+self.split[0] <= self.n_samples - self.seq_len + 1:
-                        self.seq_starts = np.append(self.seq_starts, add_seq_start+self.split[0])
+                    if add_seq_start - self.split[0] >= 0:
+                        self.seq_starts = np.append(self.seq_starts, add_seq_start - self.split[0])
+                    if add_seq_start + self.split[1] <= self.n_samples - self.seq_len + 1:
+                        self.seq_starts = np.append(self.seq_starts, add_seq_start + self.split[1])
+                    if add_seq_start - self.split[1] >= 0:
+                        self.seq_starts = np.append(self.seq_starts, add_seq_start - self.split[1])
+                    if add_seq_start + self.split[0] <= self.n_samples - self.seq_len + 1:
+                        self.seq_starts = np.append(self.seq_starts, add_seq_start + self.split[0])
 
                 self.seq_starts = np.sort(self.seq_starts)
                 self.seq_starts = np.unique(self.seq_starts, axis=0)
                 self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
                 self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                                shuffle=True, pin_memory=True)
-
-                y_seqs = get_sub_seqs_label2(self.ori_label, seq_starts=self.seq_starts, seq_len=self.seq_len) if self.ori_label is not None else None
+                #
+                y_seqs = get_sub_seqs_label2(self.ori_label, seq_starts=self.seq_starts,
+                                             seq_len=self.seq_len) if self.ori_label is not None else None
+                self.train_label = y_seqs
                 self.trainsets['seqstarts' + str(epoch)] = self.seq_starts
-                self.trainsets['yseq' + str(epoch)] = y_seqs
+                if y_seqs is not None:
+                    self.trainsets['yseq' + str(epoch)] = y_seqs
                 self.trainsets['dis' + str(epoch)] = dis
 
         elif self.sample_selection == 1:        # 我的方法 特别测试
@@ -569,8 +587,8 @@ class BaseDeepAD(metaclass=ABCMeta):
             importance = None
             self.net.eval()
             for ii, batch_x in enumerate(self.train_loader):
-                # metric = self.get_importance_ICLR21(batch_x, epoch, ii)
-                metric = self.get_importance_dL(batch_x, epoch, ii)
+                # metric = self.get_importance_dL(batch_x, epoch, ii)
+                metric = self.get_importance_ICLR21(batch_x, epoch, ii)
                 # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
 
                 if ii == 0:
@@ -580,7 +598,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                     importance = importance + np.sum(metric, axis=0)
 
                 if epoch != 0:  # 非第一轮迭代，计算距离
-                    dis[ii*self.batch_size: (ii+1)*self.batch_size] = np.linalg.norm(self.true_key_param-metric, axis=1) # L2范数
+                    dis[ii*self.batch_size: (ii+1)*self.batch_size] = np.linalg.norm(self.true_key_param-metric, axis=1, ord=np.Inf) # L2范数
                     # num[ii*self.batch_size: (ii+1)*self.batch_size] = metric
                 value[ii*self.batch_size: (ii+1)*self.batch_size] = np.sum(metric, axis=1)
                 num[ii*self.batch_size: (ii+1)*self.batch_size] = [sum(m > thresh) for m in metric]
@@ -629,11 +647,11 @@ class BaseDeepAD(metaclass=ABCMeta):
 
             gv_metric.append(abs(gv))
 
-        mean = np.mean(gv_metric, axis=0)
-        # metric = metric / mean      # 按列归一化
-        metric = np.divide(gv_metric, mean, out=np.zeros_like(gv_metric, dtype=np.float64), where=mean != 0)
-        metric = normalize(metric, axis=1, norm='l2')   # 对metric按行进行归一化
-        return metric
+        # mean = np.mean(gv_metric, axis=0)
+        # # metric = metric / mean      # 按列归一化
+        # gv_metric = np.divide(gv_metric, mean, out=np.zeros_like(gv_metric, dtype=np.float64), where=mean != 0)
+        # gv_metric = normalize(gv_metric, axis=1, norm='l2')   # 对metric按行进行归一化
+        return gv_metric
 
     def get_importance_ICLR21(self, batch_x, epoch, ii):
         _, losses = self.inference_forward(batch_x, self.net, self.criterion)

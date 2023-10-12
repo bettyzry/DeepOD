@@ -16,9 +16,8 @@ DeepSVDDTS:
 
 TranAD:
   lr: 0.0001
-  # 0.001
-  epochs: 100
-  batch_size: 1024 #128
+  epochs: 50
+  batch_size: 128
   epoch_steps: -1
 
 USAD:
@@ -37,8 +36,8 @@ COUTA:
   batch_size: 64
 
 TcnED:
-  epochs: 100
-  batch_size: 512 #128
+  epochs: 50
+  batch_size: 128
   lr: 0.00015
   dropout: 0.42
   kernel_size: 2
@@ -54,7 +53,7 @@ AnomalyTransformer:
 TimesNet:
   lr: 0.0001
   batch_size: 128
-  epochs: 100
+  epochs: 10
   pred_len: 0
   e_layers: 2
   d_model: 64

@@ -48,15 +48,17 @@ def get_sub_seqs_label(y, seq_len=100, stride=1):
     y_seqs: np.array
         Split label of each sequence
     """
-
     seq_starts = np.arange(0, y.shape[0] - seq_len + 1, stride)
     ys = np.array([y[i:i + seq_len] for i in seq_starts])
     y = np.sum(ys, axis=1)
 
     y_binary = np.zeros_like(y)
-    y_binary[np.where(y != 1)[0]] = 2
-    y_binary[np.where(y >= seq_len/3)[0]] = 1
-    y_binary[np.where(y == 0)[0]] = 0
+    y_binary[np.where(y != 0)[0]] = 1
+    # y_binary[np.where(y != 0)[0]] = 1
+    # y_binary[np.where(y >= seq_len/3)[0]] = 2
+    # y_binary[np.where(y >= 2*seq_len/3)[0]] = 3
+    # y_binary[np.where(y == seq_len)[0]] = 4
+    # y_binary[np.where(y == 0)[0]] = 0
     return y_binary
 
 
@@ -85,6 +87,11 @@ def get_sub_seqs_label2(y, seq_starts, seq_len):
 
     y_binary = np.zeros_like(y)
     y_binary[np.where(y!=0)[0]] = 1
+    # y_binary[np.where(y != 0)[0]] = 1
+    # y_binary[np.where(y >= seq_len/3)[0]] = 2
+    # y_binary[np.where(y >= 2*seq_len/3)[0]] = 3
+    # y_binary[np.where(y == seq_len)[0]] = 4
+    # y_binary[np.where(y == 0)[0]] = 0
     return y_binary
 
 
@@ -154,7 +161,7 @@ def insert_pollution_new(test_data, labels, rate):
 def insert_pollution_seq(test_data, labels, rate, seq_len):
     # 插入一长序列
     ori_seq = get_sub_seqs(test_data, seq_len=seq_len, stride=1)
-    oriy_seq = get_sub_seqs_label(labels, seq_len=seq_len, stride=1)
+    oriy_seq = get_sub_seqs_label2(labels, seq_len=seq_len, stride=1)
 
     split = 0.6
     train_num = int(len(ori_seq)*split)

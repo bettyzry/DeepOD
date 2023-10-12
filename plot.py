@@ -12,6 +12,7 @@ from deepod.metrics import ts_metrics, point_adjustment, point_adjustment_min
 import seaborn as sns
 from deepod.utils.utility import get_sub_seqs_label
 from testbed.utils import import_ts_data_unsupervised
+from sklearn.preprocessing import normalize
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
 
 
@@ -20,9 +21,9 @@ def zscore(x):
 
 
 def plot_loss_distribution():
-    fillname = 'ASD'     # 'MSL_combined'
-    step = 100
-    data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TcnED./%s_combined_norm0.80.csv' % fillname
+    fillname = 'PUMP'     # 'MSL_combined'
+    step = 0
+    data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TcnED./%s_norm00.csv' % fillname
     df = pd.read_csv(data_root)
     step = str(step)
 
@@ -34,13 +35,13 @@ def plot_loss_distribution():
     false = df[df.yseq0 == 1]
 
     # 绘制多个变量的密度分布图
-    sns.kdeplot(true['loss'+step], shade=True, color="r", label='Clean')
-    sns.kdeplot(false['loss'+step], shade=True, color="b", label='Polluted')
+    sns.kdeplot(true['loss'+step], shade=True, color="b", label='Clean')
+    sns.kdeplot(false['loss'+step], shade=True, color="r", label='Polluted')
     plt.legend()
     plt.show()
 
-    sns.kdeplot(true['adjloss'], shade=True, color="r", label='Clean')
-    sns.kdeplot(false['adjloss'], shade=True, color="b", label='Polluted')
+    sns.kdeplot(true['adjloss'], shade=True, color="b", label='Clean')
+    sns.kdeplot(false['adjloss'], shade=True, color="r", label='Polluted')
     plt.legend()
     plt.show()
 
@@ -151,6 +152,7 @@ def plot_dloss_distribution():
     plt.legend()
     plt.show()
 
+
 def plot1(data_root, fillname, step):
     df = pd.read_csv(data_root, index_col=0)
 
@@ -199,25 +201,136 @@ def plotT(data_root, step):
 
 
 def pollution_rate():
-    func = 'adjauc'
+    func = 'adjf1'
     # rates = [0.0, 0.1, 0.2, 0.3, 0.4]
-    rates = [0.0, 0.2, 0.4, 0.6, 0.8]
+    rates = [ 0.2, 0.4, 0.6, 0.8]
     runs = 0
+    name = 'SWaT_cut'
     for ii, rate in enumerate(rates):
-        data_root = '/home/xuhz/zry/DeepOD-new/@records/TranAD.EP.norm.%s.%s.csv' % (str(rate), str(runs))
+        # /home/xuhz/zry/DeepOD-new/@records/TranAD.SMAP_combined.norm.0.0.csv
+        data_root = '/home/xuhz/zry/DeepOD-new/@records/TranAD.%s.norm.%s.%s.csv' % (name, str(rate), str(runs))
         df = pd.read_csv(data_root)
         y = df[func].values
         plt.plot(y, label=str(rate))
     plt.legend()
     plt.xlabel('epoch')
     plt.ylabel(func)
-    plt.title('TranAD.EP')
+    plt.title('TranAD.'+name)
     plt.show()
 
 
+def plot_hotmap():
+    # 数据-参数重要性 热图
+    data_root = '/home/xuhz/zry/DeepOD-new/@g_detail/1.csv'
+    df = pd.read_csv(data_root, index_col=0)
+    namelist = [str(i) for i in range(1, 100)]
+    df = df.rename(columns={'0': 'label'})
+    true = df[df.label == 0][namelist]
+    false = df[df.label == 1][namelist]
+    sns.heatmap(data=true)
+    plt.show()
+    sns.heatmap(data=false)
+    plt.show()
+    return
+
+
+def plot_param_distribution():
+    data_root = '/home/xuhz/zry/DeepOD-new/@g_detail/TcnED-PUMA-dL-ori/2.csv'
+    df = pd.read_csv(data_root, index_col=0)
+    df = df.rename(columns={'0': 'label'})
+
+    df = df.apply(lambda x: (x - np.min(x)) / (np.max(x) - np.min(x)))      # 按列归一化
+
+    values = df.iloc[:, 1:].values
+
+    # mean = np.mean(values, axis=0)
+    # # metric = metric / mean      # 按列归一化
+    # values = np.divide(values, mean, out=np.zeros_like(values, dtype=np.float64), where=mean != 0)
+    values = normalize(values, axis=1, norm='l2')   # 对metric按行进行归一化
+
+    k100 = []
+    for ii, value in enumerate(values):
+        index = np.argsort(value)[:100]       # 最关键的100个参数
+        k100.append(index)
+    newdf = pd.DataFrame(k100)
+    true = newdf[df.label == 0].values
+    false = newdf[df.label == 1].values
+
+    true = np.concatenate(true)
+    false = np.concatenate(false)
+
+    plt.hist(true)
+    plt.show()
+    plt.hist(false)
+    plt.show()
+
+
+def plot_singledata_param():
+    from matplotlib import pyplot
+    plt.style.use('seaborn-whitegrid')
+    palette = pyplot.get_cmap('Set1')
+
+    model = 'TcnED'
+    data = 'ASD'
+    truelist = []
+    falselist = []
+    dtindex = np.array([6, 29, 74, 104, 120, 123, 134, 138, 168, 200])
+    dfindex = np.array([9, 10, 14, 16, 21, 23, 27, 30, 38, 39])
+    title = ''
+    for i in range(1, 10):
+        data_root = '/home/xuhz/zry/DeepOD-new/@g_detail/%s-%s-ICLR21-ori/%d.csv' % (model, data, i)
+        df = pd.read_csv(data_root, index_col=0)
+        df = df.rename(columns={'0': 'label'})
+        df = df.apply(lambda x: (x - np.min(x)) / (np.max(x) - np.min(x)))      # 按列归一化
+
+        true = df[df.label == 0].values[dtindex]
+        false = df[df.label == 1].values[dfindex]
+        true = np.mean(true, axis=1)
+        false = np.mean(false, axis=1)
+        truelist.append(true)
+        falselist.append(false)
+
+    truelist = np.array(truelist)
+    falselist = np.array(falselist)
+
+    iters = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    color=palette(0)
+    avgt=np.mean(truelist,axis=1)
+    stdt=np.std(truelist,axis=1)
+    r1 = list(map(lambda x: x[0]-x[1], zip(avgt, stdt))) #上方差
+    r2 = list(map(lambda x: x[0]+x[1], zip(avgt, stdt))) #下方差
+    plt.plot(iters, avgt, label="Clean", color=color, linewidth=3.0)
+    plt.fill_between(iters, r1, r2, color=color, alpha=0.2)
+
+    color=palette(1)
+    avgf=np.mean(falselist,axis=1)
+    stdf=np.std(falselist,axis=1)
+    r1 = list(map(lambda x: x[0]-x[1], zip(avgf, stdf)))#上方差
+    r2 = list(map(lambda x: x[0]+x[1], zip(avgf, stdf)))#下方差
+    plt.plot(iters, avgf, label="Polluted",color=color, linewidth=3.0)
+    plt.fill_between(iters, r1, r2, color=color, alpha=0.2)
+
+    plt.legend()
+    plt.xlabel('Epoch', fontsize=15)
+    plt.ylabel('Parameter Importance', fontsize=15)
+    plt.title(title)
+    plt.show()
+
+    result = np.concatenate([avgt, stdt, avgf, stdf])
+
+    result_file = '/home/xuhz/zry/DeepOD-new/ModelParam.csv'
+    dfp = pd.read_csv(result_file, index_col=0)
+    dfp['%s-%s' % (model, data)] = result
+    dfp.to_csv(result_file, index=False)
+    return
+
+
 if __name__ == '__main__':
-    # plot_loss_distribution()
+    plot_loss_distribution()
     # plot_dis_distribution()
-    pollution_rate()
+    # pollution_rate()
+    # plot_hotmap()
+    # plot_param_distribution()
+    # plot_singledata_param()
     # data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TranAD./%s_combined_myfunc0.csv' % fillname
     # plotT(data_root, step)
