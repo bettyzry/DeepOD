@@ -170,6 +170,9 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.trainsets = {}
         self.result_detail = []
         self.g_detail = {}
+
+        self.dqnss = None
+
         return
 
     def fit(self, X, y=None):
@@ -568,7 +571,8 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
                 self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
                                                shuffle=True, pin_memory=True)
-                #
+                self.n_samples = len(self.train_data)
+
                 y_seqs = get_sub_seqs_label2(self.ori_label, seq_starts=self.seq_starts,
                                              seq_len=self.seq_len) if self.ori_label is not None else None
                 self.train_label = y_seqs

@@ -2,7 +2,8 @@ import gym
 import numpy as np
 
 from gym import spaces
-from ssutil import percentile
+from sample_selection.ssutil import percentile
+from deepod.utils.utility import get_sub_seqs_label
 
 
 class ADEnv(gym.Env):
@@ -10,7 +11,7 @@ class ADEnv(gym.Env):
     Customized environment for anomaly detection
     """
 
-    def __init__(self, dataset: np.ndarray, seq_len=30, stride=1,
+    def __init__(self, dataset: np.ndarray, y=None, seq_len=30, stride=30,
                  num_sample=1000):
         """
         Initialize anomaly environment for DPLAN algorithm.
@@ -25,6 +26,9 @@ class ADEnv(gym.Env):
         self.x = dataset                                                                # 原始数据
         self.x_seq_index = np.arange(0, self.n_samples - seq_len + 1, stride)           # 训练集序列的索引标签（初始化为无重复的序列开头）
         self.x_seqs = np.array([self.x[i:i + self.seq_len] for i in self.x_seq_index])       # 当前的训练集序列（初始化为无重复的序列）
+
+        self.y = y
+        self.y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=stride) if y is not None else None
 
         # hyper parameter
         # 贪婪算法选择行动时，为了提高效率进行了采样。如果训练集少于numsample，则使用全集
@@ -97,6 +101,7 @@ class ADEnv(gym.Env):
                 return 0
 
     def step(self, action):
+        # 执行这个行动，并输出
         self.state_a = int(self.state_a)
         self.state_t = int(self.state_t)
         # store former state

@@ -47,20 +47,7 @@ class AnomalyTransformer(BaseDeepAD):
             self.trainsets['yseq0'] = self.train_label
             self.ori_label = y
 
-        # train_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
-        self.net = AnomalyTransformerModel(
-            win_size=self.seq_len,
-            enc_in=self.n_features,
-            c_out=self.n_features,
-            e_layers=3,
-            device=self.device
-        ).to(self.device)
-
-        self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
-                                shuffle=True, pin_memory=True)
-
-        self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
+        self.training_prepare(self.train_data, y=self.train_label)
 
         self.net.train()
         for e in range(self.epochs):
@@ -84,6 +71,22 @@ class AnomalyTransformer(BaseDeepAD):
         # self.decision_scores_ = self.decision_function(X)
         # self.labels_ = self._process_decision_scores()  # in base model
         return
+
+    def training_prepare(self, X, y):
+        # train_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+        self.net = AnomalyTransformerModel(
+            win_size=self.seq_len,
+            enc_in=self.n_features,
+            c_out=self.n_features,
+            e_layers=3,
+            device=self.device
+        ).to(self.device)
+
+        self.train_loader = DataLoader(X, batch_size=self.batch_size,
+                                       shuffle=True, pin_memory=True)
+
+        self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
 
     def decision_function(self, X, return_rep=False):
         seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=1)

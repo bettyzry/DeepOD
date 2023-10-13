@@ -54,7 +54,7 @@ class TcnED(BaseDeepAD):
             if X_seqs is not None and y_seqs is not None:
                 pass
             else:
-                if self.sample_selection == 4 or self.sample_selection == 7:
+                if self.sample_selection == 7:
                     self.ori_data = X
                     self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)     # 无重叠计算seq
                     self.trainsets['seqstarts0'] = self.seq_starts
@@ -83,11 +83,7 @@ class TcnED(BaseDeepAD):
             print(f'ensemble size: {self.n_ensemble}')
 
         for _ in range(self.n_ensemble):
-            self.train_loader, self.net, self.criterion = self.training_prepare(self.train_data,
-                                                                            y=self.train_label)
-            self.optimizer = torch.optim.Adam(self.net.parameters(),
-                                         lr=self.lr,
-                                         eps=1e-6)
+            self.training_prepare(self.train_data, y=self.train_label)
 
             self.net.train()
             for epoch in range(self.epochs):
@@ -151,9 +147,9 @@ class TcnED(BaseDeepAD):
         return total_loss / cnt
 
     def training_prepare(self, X, y):
-        train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=False)
+        self.train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=False)
 
-        net = TcnAE(
+        self.net = TcnAE(
             n_features=self.n_features,
             n_hidden=self.hidden_dims,
             n_emb=self.rep_dim,
@@ -163,12 +159,11 @@ class TcnED(BaseDeepAD):
             dropout=self.dropout
         ).to(self.device)
 
-        criterion = torch.nn.MSELoss(reduction="mean")
+        self.criterion = torch.nn.MSELoss(reduction="mean")
 
-        if self.verbose >= 2:
-            print(net)
-
-        return train_loader, net, criterion
+        self.optimizer = torch.optim.Adam(self.net.parameters(),
+                                          lr=self.lr,
+                                          eps=1e-6)
 
     def inference_prepare(self, X):
         test_loader = DataLoader(X, batch_size=self.batch_size,

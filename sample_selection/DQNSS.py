@@ -5,14 +5,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from ssutil import DQN_iforest, get_total_reward, test_model
-from ENV import ADEnv
+from sample_selection.ssutil import DQN_iforest, get_total_reward, test_model
+from sample_selection.ENV import ADEnv
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from DQN import DQN
-from RelayMemory import ReplayMemory
+from sample_selection.DQN import DQN
+from sample_selection.RelayMemory import ReplayMemory
+from deepod.metrics import ts_metrics, point_adjustment
+import time
 
 torch.manual_seed(42)
 random.seed(42)
@@ -27,7 +29,7 @@ class DQNSS():
     DPLAN agent that encapsulates the training and testing of the DQN
     """
 
-    def __init__(self, env: ADEnv, test_X, test_Y, destination_path, device='gpu', double_dqn=True,
+    def __init__(self, clf, device='cpu',
                  n_episodes=6, steps_per_episode=2000, max_memory=100000, eps_max=1, eps_min=0.1,
                  eps_decay=10000, hidden_size=10, learning_rate=0.25e-4, momentum=0.95,
                  min_squared_gradient=0.1, warmup_steps=100, gamma=0.99, batch_size=64,
@@ -40,19 +42,9 @@ class DQNSS():
         :param destination_path: the path where to save the model
         :param device: the device to use for training
         """
-        self.double_dqn = double_dqn
-        self.test_X = test_X
-        self.test_Y = test_Y
+        self.clf = clf
         self.device = device
-        self.env = env
-
-        if not os.path.exists(destination_path):
-            raise ValueError('destination path does not exist')
-
-        self.destination_path = destination_path
-
-        # tensor rapresentation of the dataset used in the intrinsic reward
-        self.x_tensor = torch.tensor(env.x, dtype=torch.float32, device=device)
+        self.env = None
 
         # hyperparameters setup
         self.hidden_size = hidden_size
@@ -73,18 +65,22 @@ class DQNSS():
         self.theta_update = theta_update
         self.weight_decay = weight_decay
 
-        #  n actions and n observations
-        self.n_actions = env.action_space.n  # 可以执行的行动的数量
-        self.n_feature = env.n_feature  # 有错？？
+        self.x_tensor = None
+        self.n_actions = None
+        self.n_feature = None
 
-        #  resetting the agent
+    def reset(self):
+        self.reset_counters()
+        self.reset_memory()
         self.reset_nets()
 
-        # resetting agent's memory
-        self.reset_memory()
-
-        # resetting counters
-        self.reset_counters()
+    def init(self):
+        # tensor rapresentation of the dataset used in the intrinsic reward
+        self.x_tensor = torch.tensor(self.env.x, dtype=torch.float32, device=self.device)
+        #  n actions and n observations
+        self.n_actions = self.env.action_space.n  # 可以执行的行动的数量
+        self.n_feature = self.env.n_feature  # 有错？？
+        self.reset()
 
     def reset_memory(self):
         self.memory = ReplayMemory(self.max_memory_size)
@@ -214,21 +210,51 @@ class DQNSS():
                 state = next_state
                 state_index = next_state_index
 
-    def fit(self, reset_nets=False):
+    def OD_fit(self, X, y=None, Xtest=None, Ytest=None):
+        self.env = ADEnv(
+            dataset=X,
+            num_sample=1000
+        )
+        self.init()
+        self.clf.trainsets['seqstarts0'] = self.env.x_seq_index
+        self.clf.n_samples, self.clf.n_features = self.env.x_seqs.shape[0], self.env.x_seqs.shape[2]
+        if y is not None:
+            self.clf.trainsets['yseq0'] = self.env.y_seqs
+
+        self.clf.training_prepare(self.env.x_seqs, y=self.env.y_seqs)
+
+        self.clf.net.train()
+        for epoch in range(self.clf.epochs):
+            t1 = time.time()
+            loss = self.clf.training(epoch)
+            # self.SS_fit(epoch)
+            # self.sample_selection(epoch)
+
+            print(f'epoch{epoch + 1:3d}, '
+                  f'training loss: {loss:.6f}, '
+                  f'time: {time.time() - t1:.1f}s')
+
+            if Xtest is not None and Ytest is not None:
+                self.clf.net.eval()
+                scores = self.clf.decision_function(Xtest)
+                eval_metrics = ts_metrics(Ytest, scores)
+                adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
+                result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
+                          adj_eval_metrics[2]]
+                print(result)
+                self.clf.result_detail.append(result)
+                self.clf.net.train()
+        return
+
+    def SS_fit(self, epoch):
         """
         Fit the model according to the dataset and hyperparameters. The best model is obtained by using
         the best auc-pr score with the validation set.
         :param reset_nets: whether to reset the networks
         """
-
-        # reset necessary variables
-        self.reset_counters()
-        self.reset_memory()
-        if reset_nets:
-            self.reset_nets()
-
         # perform warmup steps
-        # self.warmup_steps()
+        if epoch == 0:
+            self.warmup_steps()
 
         for i_episode in range(self.num_episodes):
             # Initialize the environment and get it's state
@@ -268,11 +294,6 @@ class DQNSS():
                 if self.num_steps_done % self.target_update == 0:
                     policy_net_state_dict = self.policy_net.state_dict()
                     self.target_net.load_state_dict(policy_net_state_dict)
-                # validation step
-                if self.num_steps_done % self.validation_frequency == 0:
-                    auc, pr = test_model(self.test_X, self.test_Y,self.policy_net)
-                    self.pr_auc_history.append(pr)
-                    self.roc_auc_history.append(auc)
                 if self.num_steps_done % self.theta_update == 0:
                     self.intrinsic_rewards = DQN_iforest(self.x_tensor, self.policy_net)
 
@@ -285,41 +306,23 @@ class DQNSS():
 
         print('Complete')
 
-    def save_model(self, model_name):
-        """
-        Save the model
-        :param model_name: name of the model
-        """
-        file_path = os.path.join(self.destination_path, model_name)
-        torch.save(self.policy_net.state_dict(), file_path)
+    def sample_selection(self, epoch):
+        return
+    #
+    # def save_model(self, model_name):
+    #     """
+    #     Save the model
+    #     :param model_name: name of the model
+    #     """
+    #     file_path = os.path.join(self.destination_path, model_name)
+    #     torch.save(self.policy_net.state_dict(), file_path)
+    #
+    # def load_model(self, model_name):
+    #     """
+    #     Save the model
+    #     :param model_name: name of the model
+    #     """
+    #     file_path = os.path.join(self.destination_path, model_name)
+    #     self.policy_net.load_state_dict(torch.load(file_path))
+    #     self.target_net.load_state_dict(self.policy_net.state_dict())
 
-    def load_model(self, model_name):
-        """
-        Save the model
-        :param model_name: name of the model
-        """
-        file_path = os.path.join(self.destination_path, model_name)
-        self.policy_net.load_state_dict(torch.load(file_path))
-        self.target_net.load_state_dict(self.policy_net.state_dict())
-
-    def show_results(self):
-        """
-        Show the results of the training
-        """
-
-        # plot total reward, pr auc and roc auc history in subplots
-        fig, axs = plt.subplots(3, 1, figsize=(10, 10))
-        axs[0].plot(self.episodes_total_reward)
-        axs[0].set_title('Total reward per episode')
-        axs[1].plot(self.pr_auc_history)
-        axs[1].set_title('PR AUC per validation step')
-        axs[2].plot(self.roc_auc_history)
-        axs[2].set_title('ROC AUC per validation step')
-        plt.show()
-
-    def model_performance(self):
-        """
-        Test the model
-        :param on_test_set: whether to test on the test set or the validation set
-        """
-        return test_model(self.test_X, self.test_Y, self.policy_net)

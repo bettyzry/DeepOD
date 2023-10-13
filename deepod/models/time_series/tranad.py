@@ -53,17 +53,7 @@ class TranAD(BaseDeepAD):
             self.train_label = y
             self.n_samples, self.n_features = X.shape
 
-        self.net = TranADNet(
-            feats=self.n_features,
-            n_window=self.seq_len
-        ).to(self.device)
-
-        self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size,
-                                shuffle=True, pin_memory=True)
-
-        self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
-
+        self.training_prepare(self.train_data, y=self.train_label)
         self.net.train()
         for e in range(self.epochs):
             t1 = time.time()
@@ -85,6 +75,18 @@ class TranAD(BaseDeepAD):
         # self.decision_scores_ = self.decision_function(X)
         # self.labels_ = self._process_decision_scores()
         return
+
+    def training_prepare(self, X, y):
+        self.net = TranADNet(
+            feats=self.n_features,
+            n_window=self.seq_len
+        ).to(self.device)
+
+        self.train_loader = DataLoader(X, batch_size=self.batch_size,
+                                shuffle=True, pin_memory=True)
+
+        self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
 
     def decision_function(self, X, return_rep=False):
         seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=1)
