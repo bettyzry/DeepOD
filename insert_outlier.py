@@ -63,8 +63,10 @@ def insert_outlier(train, num, okind, test_label=None):
     train = pd.DataFrame(train)
     N = len(train)
     Columns = len(train.columns)
-    actions = {okind:[]}
-    sep = int(N/num)
+    actions = {okind: []}
+
+    sum_num = 20
+    sep = int(N / sum_num)
     factor = 4
 
     if okind == 'extreme':
@@ -80,20 +82,19 @@ def insert_outlier(train, num, okind, test_label=None):
                 outlier_length.append(splits[ii] - splits[ii - 1])
             timestamp = int(np.average(outlier_length))
         else:
-            timestamp = min(1000, int(sep/10))
+            timestamp = min(1000, int(sep / 10))
 
-    loc = [i for i in range(1000, N-timestamp, sep)]
+    lists = np.array([0, 5, 10, 15, 1, 6, 11, 16, 2, 7, 12, 17, 3, 8, 13, 18, 4, 9, 14, 19])
+    loc = np.array([i for i in range(1000, N - timestamp, sep)])
+    realloc = [i for i in loc[lists[:num]]]
 
-    # actions = {'extreme': []}
-    # # {'n': 0, 'timestamps': [(122, 10000)], 'factor': 8}
-    # actions[okind].append()
-    timestamps = [(l, l+timestamp) for l in loc]
+    timestamps = [(l, l + timestamp) for l in realloc]
     for n in range(Columns):
         actions[okind].append({'n': n, 'timestamps': timestamps, 'factor': factor})
     train = add_outliers(train, actions)
     labels = np.zeros(N)
-    for l in loc:
-        labels[l:l+timestamp] = 1
+    for l in realloc:
+        labels[l:l + timestamp] = 1
     return train, labels
 
 
@@ -102,12 +103,12 @@ def main():
     label = pd.read_csv('/home/xuhz/dataset/5-TSdata/_processed_data/SMD/machine-1-3/machine-1-3_test.csv')
     label = label[['label']].values
     columns = df.columns
-    for col in columns:
-        plt.plot(df[col], label=col)
-    plt.legend()
-    plt.show()
+    # for col in columns:
+    #     plt.plot(df[col], label=col)
+    # plt.legend()
+    # plt.show()
 
-    df, labels = insert_outlier(df, label, 10, 'variance')
+    df, labels = insert_outlier(df, 20, 'variance')
 
     for col in columns:
         plt.plot(df[col], label=col)
