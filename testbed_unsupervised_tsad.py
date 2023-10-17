@@ -4,6 +4,7 @@ testbed of unsupervised time series anomaly detection
 @Author: Hongzuo Xu <hongzuoxu@126.com, xuhongzuo13@nudt.edu.cn>
 """
 
+import matplotlib.pyplot as plt
 import os
 import argparse
 import getpass
@@ -14,6 +15,7 @@ import numpy as np
 from testbed.utils import import_ts_data_unsupervised
 from deepod.metrics import ts_metrics, point_adjustment
 import pandas as pd
+from insert_outlier import insert_outlier
 from sample_selection.DQNSS import DQNSS
 from sample_selection.ENV import ADEnv
 from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution
@@ -29,10 +31,10 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='ASD,DASADS,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,PUMP',
-                    help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
-                         'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
-                    # SMAP,MSL,
+                    default='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2',
+                    help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2',
+                    # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
+                    #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     )
 parser.add_argument("--entities", type=str,
                     default='FULL',
@@ -40,11 +42,11 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='TimesNet',
+parser.add_argument("--model", type=str, default='TranAD',
                     help="TcnED, TimesNet, TranAD, AnomalyTransformer"
                     )
 
-parser.add_argument('--silent_header', type=bool, default=True)
+parser.add_argument('--silent_header', type=bool, default=False)
 parser.add_argument("--flag", type=str, default='')
 parser.add_argument("--note", type=str, default='')
 
@@ -118,6 +120,8 @@ def main():
             # train_data, train_labels, test_data, labels = insert_pollution_new(test_data, labels, args.rate)
             # train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
             # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
+            train_data, train_labels = insert_outlier(train_data, 10, 'variance')
+
             entries = []
             t_lst = []
             for i in range(args.runs):

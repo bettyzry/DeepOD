@@ -10,7 +10,7 @@ class MultivariateExtremeOutlierGenerator(MultivariateOutlierGenerator):
 
     def get_value(self, current_timestamp, timeseries):
         if current_timestamp in self.timestamps:
-            local_std = timeseries.iloc[max(0, current_timestamp - 10):current_timestamp + 10].std()
+            local_std = timeseries.iloc[max(0, current_timestamp - 1000):current_timestamp + 1000].std()
             return np.random.choice([-1, 1]) * self.factor * local_std
         else:
             return 0

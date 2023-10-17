@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,28 +11,6 @@ from agots.agots.multivariate_generators.multivariate_shift_outlier_generator im
 from agots.agots.multivariate_generators.multivariate_trend_outlier_generator import MultivariateTrendOutlierGenerator
 from agots.agots.multivariate_generators.multivariate_variance_outlier_generator import \
     MultivariateVarianceOutlierGenerator
-
-np.random.seed(1337)
-
-
-# STREAM_LENGTH = 200
-# N = 4
-# K = 2
-#
-# dg = MultivariateDataGenerator(STREAM_LENGTH, N, K)
-# df = dg.generate_baseline(initial_value_min=-4, initial_value_max=4)
-#
-# for col in df.columns:
-#     plt.plot(df[col], label=col)
-# plt.legend()
-# plt.show()
-#
-# df.corr()
-#
-# df = dg.add_outliers({'extreme': [{'n': 0, 'timestamps': [(50,), (190,)]}],
-#                       'shift':   [{'n': 1, 'timestamps': [(100, 190)]}],
-#                       'trend':   [{'n': 2, 'timestamps': [(20, 150)]}],
-#                       'variance':[{'n': 3, 'timestamps': [(20, 80)]}]})
 
 
 def add_outliers(data, config):
@@ -79,21 +59,65 @@ def add_outliers(data, config):
     return df
 
 
-df = pd.read_csv('/home/xuhz/dataset/5-TSdata/_processed_data/SMD/machine-1-3/machine-1-3_train.csv')[['A0']]
-for col in df.columns:
-    plt.plot(df[col], label=col)
-plt.legend()
-plt.show()
+def insert_outlier(train, num, okind, test_label=None):
+    train = pd.DataFrame(train)
+    N = len(train)
+    Columns = len(train.columns)
+    actions = {okind:[]}
+    sep = int(N/num)
+    factor = 4
+
+    if okind == 'extreme':
+        timestamp = 1
+    else:
+        if test_label is not None:
+            splits = np.where(test_label[1:] != test_label[:-1])[0] + 1
+            is_anomaly = test_label[0] == 1
+            outlier_length = []
+            if is_anomaly:
+                splits = splits[1:]
+            for ii in range(1, len(splits), 2):
+                outlier_length.append(splits[ii] - splits[ii - 1])
+            timestamp = int(np.average(outlier_length))
+        else:
+            timestamp = min(1000, int(sep/10))
+
+    loc = [i for i in range(1000, N-timestamp, sep)]
+
+    # actions = {'extreme': []}
+    # # {'n': 0, 'timestamps': [(122, 10000)], 'factor': 8}
+    # actions[okind].append()
+    timestamps = [(l, l+timestamp) for l in loc]
+    for n in range(Columns):
+        actions[okind].append({'n': n, 'timestamps': timestamps, 'factor': factor})
+    train = add_outliers(train, actions)
+    labels = np.zeros(N)
+    for l in loc:
+        labels[l:l+timestamp] = 1
+    return train, labels
 
 
-df = add_outliers(df, {
-                       # 'extreme': [{'n': 0, 'timestamps': [(122, 10000)], 'factor': 4}],
-                       'shift': [{'n': 0, 'timestamps': [(1000, 2000), (3000, 4000)], 'factor': 4}],
-                       # 'trend': [{'n': 0, 'timestamps': [(7000, 8000)], 'factor': 4}],      # 1000*0.005
-                       # 'variance': [{'n': 0, 'timestamps': [(13000, 14000)], 'factor': 4}]
-                       })
+def main():
+    df = pd.read_csv('/home/xuhz/dataset/5-TSdata/_processed_data/SMD/machine-1-3/machine-1-3_train.csv')[['A0', 'A1']]
+    label = pd.read_csv('/home/xuhz/dataset/5-TSdata/_processed_data/SMD/machine-1-3/machine-1-3_test.csv')
+    label = label[['label']].values
+    columns = df.columns
+    for col in columns:
+        plt.plot(df[col], label=col)
+    plt.legend()
+    plt.show()
 
-for col in df.columns:
-    plt.plot(df[col], label=col)
-plt.legend()
-plt.show()
+    df, labels = insert_outlier(df, label, 10, 'variance')
+
+    for col in columns:
+        plt.plot(df[col], label=col)
+    plt.legend()
+    plt.show()
+
+
+if __name__ == '__main__':
+    main()
+    # df = {'extreme': [{'n': 0, 'timestamps': [(122, 10000)], 'factor': 8}],
+    #       'shift': [{'n': 0, 'timestamps': [(1000, 2000), (3000, 4000)], 'factor': -8}],
+    #       'trend': [{'n': 0, 'timestamps': [(7000, 8000)], 'factor': 0.005}],      # 1000*0.005
+    #       'variance': [{'n': 0, 'timestamps': [(13000, 14000)], 'factor': 10}]})
