@@ -51,7 +51,7 @@ AnomalyTransformer:
   k: 3
 
 TimesNet:
-  lr: 0.00001
+  lr: 0.00001 #0.0001
   batch_size: 128
   epochs: 50
   pred_len: 0

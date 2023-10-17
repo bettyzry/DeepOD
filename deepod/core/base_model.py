@@ -25,6 +25,7 @@ from sklearn.metrics import f1_score
 from scipy.spatial.distance import pdist
 from sklearn.preprocessing import normalize
 import torch.nn.functional as F
+from sklearn.ensemble import IsolationForest
 
 
 class BaseDeepAD(metaclass=ABCMeta):
@@ -172,6 +173,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.g_detail = {}
 
         self.dqnss = None
+        self.iforest = IsolationForest()
 
         return
 
@@ -507,7 +509,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             if epoch >= 10:
                 return
 
-            # dis = np.zeros(len(self.train_data))
+            dis = np.zeros(len(self.train_data))
             importance = None
             metrics = np.array([])
             self.net.eval()
@@ -536,11 +538,15 @@ class BaseDeepAD(metaclass=ABCMeta):
 
             if epoch == 0:
                 self.param_musk = np.sort(importance.argsort()[:10000])     # 前10000个最重要的数据
-                self.true_key_param = importance[self.param_musk] / len(self.train_data)
+                # self.true_key_param = importance[self.param_musk] / len(self.train_data)
             else:
-                importance = np.sum(metrics, axis=0) / len(self.train_data)
-                self.true_key_param = importance
-                dis = np.linalg.norm(importance - metrics, axis=1, ord=np.Inf)
+                # importance = np.sum(metrics, axis=0) / len(self.train_data)
+                # self.true_key_param = importance
+
+                metric_torch = torch.tensor(metrics, dtype=torch.float32, device='cpu')
+                self.iforest.fit(metric_torch)
+                dis = self.iforest.decision_function(metric_torch)
+                # dis = np.linalg.norm(importance - metrics, axis=1, ord=np.Inf)
 
                 # metrics = np.insert(metrics, 0, self.train_label, axis=1)
                 # df = pd.DataFrame(metrics)

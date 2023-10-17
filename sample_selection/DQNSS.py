@@ -29,7 +29,7 @@ class DQNSS():
     DPLAN agent that encapsulates the training and testing of the DQN
     """
 
-    def __init__(self, clf, device='cpu',
+    def __init__(self, env, device='cpu',
                  n_episodes=6, steps_per_episode=2000, max_memory=100000, eps_max=1, eps_min=0.1,
                  eps_decay=10000, hidden_size=10, learning_rate=0.25e-4, momentum=0.95,
                  min_squared_gradient=0.1, warmup_steps=100, gamma=0.99, batch_size=64,
@@ -42,9 +42,8 @@ class DQNSS():
         :param destination_path: the path where to save the model
         :param device: the device to use for training
         """
-        self.clf = clf
         self.device = device
-        self.env = None
+        self.env = env
 
         # hyperparameters setup
         self.hidden_size = hidden_size
@@ -69,18 +68,17 @@ class DQNSS():
         self.n_actions = None
         self.n_feature = None
 
-    def reset(self):
-        self.reset_counters()
-        self.reset_memory()
-        self.reset_nets()
-
-    def init(self):
         # tensor rapresentation of the dataset used in the intrinsic reward
         self.x_tensor = torch.tensor(self.env.x, dtype=torch.float32, device=self.device)
         #  n actions and n observations
         self.n_actions = self.env.action_space.n  # 可以执行的行动的数量
         self.n_feature = self.env.n_feature  # 有错？？
         self.reset()
+
+    def reset(self):
+        self.reset_counters()
+        self.reset_memory()
+        self.reset_nets()
 
     def reset_memory(self):
         self.memory = ReplayMemory(self.max_memory_size)
@@ -119,7 +117,7 @@ class DQNSS():
             weight_decay=self.weight_decay
         )
 
-    def select_action(self, state, steps_done):
+    def select_action(self, data, steps_done):
         """
         Select an action using the epsilon-greedy policy
         :param state: the current state
@@ -135,7 +133,7 @@ class DQNSS():
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                return self.policy_net(state).max(1)[1].view(1, 1)
+                return self.policy_net(data).max(1)[1].view(1, 1)
         else:
             return torch.tensor([[self.env.action_space.sample()]], device=self.device, dtype=torch.long)
 
@@ -195,39 +193,57 @@ class DQNSS():
         """
         Implement the warmup steps to fill the replay memory using random actions
         """
+        # 确定 param_musk，params
+        importance = None
+        self.env.clf.net.eval()
+        for ii, batch_x in enumerate(self.env.clf.train_loader):
+            # metric = self.get_importance_dL(batch_x, epoch, ii)
+            metric = self.env.clf.get_importance_ICLR21(batch_x, 0, ii)
+            # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
+            if ii == 0:
+                importance = np.sum(metric, axis=0)
+            else:
+                importance += np.sum(metric, axis=0)
+        self.env.clf.param_musk = np.sort(importance.argsort()[:10000])  # 前10000个最重要的数据
+
         for _ in range(self.num_warmup_steps):
-            state_index = self.env.reset_state()                                    # 随机在未知数据中挑选一个点
-            state = torch.tensor(self.env.x[state_index, :], dtype=torch.float32, device=self.device).unsqueeze(0)
+            state_a, state_t = self.env.reset_state()                                    # 随机在未知数据中挑选一个点
+            data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
             for _ in range(self.steps_per_episode):
                 action = np.random.randint(0, self.n_actions)           # 随机挑选一个行动
-                next_state_index, reward, _, _ = self.env.step(action)       # 执行这个行动
-                reward = get_total_reward(reward, self.intrinsic_rewards, state_index)
+                next_state_t, reward, _, _ = self.env.step(action)       # 执行这个行动
+                reward = get_total_reward(reward, self.intrinsic_rewards, state_a)
                 reward = torch.tensor([reward], device=self.device)
-                next_state = torch.tensor(self.env.x[next_state_index, :], dtype=torch.float32,
+                next_data = torch.tensor(self.env.train_seqs[next_state_t, :], dtype=torch.float32,
                                            device=self.device).unsqueeze(0)
-                self.memory.push(state, torch.tensor([[action]], device=self.device), next_state, reward, state_index, next_state_index)
+                self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
                 # 'state', 'action', 'next_state', 'reward', 'state_index', 'next_state_index'
-                state = next_state
-                state_index = next_state_index
+                data = next_data
+                state_t = next_state_t
 
-    def OD_fit(self, X, y=None, Xtest=None, Ytest=None):
-        self.env = ADEnv(
-            dataset=X,
-            num_sample=1000
-        )
-        self.init()
-        self.clf.trainsets['seqstarts0'] = self.env.x_seq_index
-        self.clf.n_samples, self.clf.n_features = self.env.x_seqs.shape[0], self.env.x_seqs.shape[2]
-        if y is not None:
-            self.clf.trainsets['yseq0'] = self.env.y_seqs
+        # for _ in range(self.num_warmup_steps):
+        #     state_a, state_t = self.env.reset_state()                                    # 随机在未知数据中挑选一个点
+        #     data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
+        #     for _ in range(self.steps_per_episode):
+        #         action = np.random.randint(0, self.n_actions)           # 随机挑选一个行动
+        #         next_state_t, reward, _, _ = self.env.step(action)       # 执行这个行动
+        #         reward = get_total_reward(reward, self.intrinsic_rewards, state_a)
+        #         reward = torch.tensor([reward], device=self.device)
+        #         next_data = torch.tensor(self.env.train_seqs[next_state_t, :], dtype=torch.float32,
+        #                                    device=self.device).unsqueeze(0)
+        #         self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
+        #         # 'state', 'action', 'next_state', 'reward', 'state_index', 'next_state_index'
+        #         data = next_data
+        #         state_t = next_state_t
 
-        self.clf.training_prepare(self.env.x_seqs, y=self.env.y_seqs)
+    def OD_fit(self, Xtest=None, Ytest=None):
+        self.env.clf.training_prepare(self.env.train_seqs, y=self.env.train_label)
 
-        self.clf.net.train()
-        for epoch in range(self.clf.epochs):
+        self.env.clf.net.train()
+        for epoch in range(self.env.clf.epochs):
             t1 = time.time()
-            loss = self.clf.training(epoch)
-            # self.SS_fit(epoch)
+            loss = self.env.clf.training(epoch)
+            self.SS_fit(epoch)
             # self.sample_selection(epoch)
 
             print(f'epoch{epoch + 1:3d}, '
@@ -235,15 +251,15 @@ class DQNSS():
                   f'time: {time.time() - t1:.1f}s')
 
             if Xtest is not None and Ytest is not None:
-                self.clf.net.eval()
-                scores = self.clf.decision_function(Xtest)
+                self.env.clf.net.eval()
+                scores = self.env.clf.decision_function(Xtest)
                 eval_metrics = ts_metrics(Ytest, scores)
                 adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
                 result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
                           adj_eval_metrics[2]]
                 print(result)
-                self.clf.result_detail.append(result)
-                self.clf.net.train()
+                self.env.clf.result_detail.append(result)
+                self.env.clf.net.train()
         return
 
     def SS_fit(self, epoch):
@@ -259,16 +275,16 @@ class DQNSS():
         for i_episode in range(self.num_episodes):
             # Initialize the environment and get it's state
             reward_history = []
-            state_index = self.env.reset_state()  # 随机挑选一个未知点
+            state_index_a, state_index_t = self.env.reset_state()  # 随机挑选一个未知点
             #  mantain both the obervation as the dataset index and value
             # state为初始点的具体数值
-            state = torch.tensor(self.env.x[state_index, :], dtype=torch.float32, device=self.device).unsqueeze(0)
+            data = torch.tensor(self.env.train_seqs[state_index_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
 
             for t in range(self.steps_per_episode):
                 self.num_steps_done += 1
 
                 # select_action encapsulates the epsilon-greedy policy
-                action = self.select_action(state, self.num_steps_done)
+                action = self.select_action(data, self.num_steps_done)
 
                 next_state_index, reward, _, _ = self.env.step(action.item())
                 # states.append((self.env.x[observation,:],action.item()))

@@ -8,6 +8,7 @@ import time
 from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label
 from deepod.core.base_model import BaseDeepAD
 from deepod.metrics import ts_metrics, point_adjustment
+from tqdm import tqdm
 
 
 class TimesNet(BaseDeepAD):
@@ -161,7 +162,7 @@ class TimesNet(BaseDeepAD):
         preds = []
 
         # with torch.no_gard():
-        for batch_x in dataloader:  # test_set
+        for batch_x in tqdm(dataloader):  # test_set
             batch_x = batch_x.float().to(self.device)
 
             outputs = self.net(batch_x)
@@ -186,10 +187,6 @@ class TimesNet(BaseDeepAD):
         error = error.mean(axis=1)
         error = error.mean(axis=1)
         return output, error
-
-    def training_prepare(self, X, y):
-        """define train_loader, net, and criterion"""
-        return
 
     def inference_prepare(self, X):
         """define test_loader"""

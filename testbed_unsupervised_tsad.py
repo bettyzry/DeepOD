@@ -15,6 +15,7 @@ from testbed.utils import import_ts_data_unsupervised
 from deepod.metrics import ts_metrics, point_adjustment
 import pandas as pd
 from sample_selection.DQNSS import DQNSS
+from sample_selection.ENV import ADEnv
 from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution
 
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
@@ -28,7 +29,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='PUMP',
+                    default='ASD,DASADS,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,PUMP',
                     help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                          'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     # SMAP,MSL,
@@ -39,11 +40,11 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='TcnED',
+parser.add_argument("--model", type=str, default='TimesNet',
                     help="TcnED, TimesNet, TranAD, AnomalyTransformer"
                     )
 
-parser.add_argument('--silent_header', type=bool, default=False)
+parser.add_argument('--silent_header', type=bool, default=True)
 parser.add_argument("--flag", type=str, default='')
 parser.add_argument("--note", type=str, default='')
 
@@ -127,11 +128,19 @@ def main():
                 clf.sample_selection = args.sample_selection
                 # clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
                 # clf.fit(train_data, train_labels, test_data, labels)
-                # clf.fit(train_data, None, test_data, labels)
+                clf.fit(train_data, None, test_data, labels)
                 # clf.fit(test_data, labels)
                 # clf.fit(train_data, labels)
-                dqnss = DQNSS(clf)
-                dqnss.OD_fit(train_data, None, test_data, labels)
+
+                # env = ADEnv(
+                #     dataset=train_data,
+                #     y=None,
+                #     clf=clf,
+                #     num_sample=1000
+                # )
+                # dqnss = DQNSS(env)
+                # dqnss.OD_fit(test_data, labels)
+
                 t = time.time() - t1
 
                 scores = clf.decision_function(test_data)
@@ -178,7 +187,7 @@ def main():
 
 
 if __name__ == '__main__':
-    for i in [0,7,5,6]:        # 0, 5, 6, 7
+    for i in [7]:        # 0, 5, 6, 7
         print(i)
         args.sample_selection = i
         args.runs = 5

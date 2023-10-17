@@ -8,6 +8,7 @@ import time
 from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label
 from deepod.core.base_model import BaseDeepAD
 from deepod.metrics import ts_metrics, point_adjustment
+from tqdm import tqdm
 
 
 def my_kl_loss(p, q):
@@ -183,7 +184,7 @@ class AnomalyTransformer(BaseDeepAD):
         attens_energy = []
         preds = []
 
-        for input_data in dataloader:  # test_set
+        for input_data in tqdm(dataloader):  # test_set
             input = input_data.float().to(self.device)
             output, series, prior, _ = self.net(input)
 
@@ -252,10 +253,6 @@ class AnomalyTransformer(BaseDeepAD):
         cri = metric * loss
         loss_final = cri.mean(axis=1)
         return output, loss_final
-
-    def training_prepare(self, X, y):
-        """define train_loader, net, and criterion"""
-        return
 
     def inference_prepare(self, X):
         """define test_loader"""

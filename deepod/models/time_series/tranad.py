@@ -201,10 +201,6 @@ class TranAD(BaseDeepAD):
         l1 = l1.mean(axis=1)
         return z, l1
 
-    def training_prepare(self, X, y):
-        """define train_loader, net, and criterion"""
-        return
-
     def inference_prepare(self, X):
         """define test_loader"""
         return
