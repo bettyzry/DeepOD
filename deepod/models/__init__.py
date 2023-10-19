@@ -26,12 +26,14 @@ from deepod.models.time_series.tranad import TranAD
 from deepod.models.time_series.couta import COUTA
 from deepod.models.time_series.usad import USAD
 from deepod.models.time_series.tcned import TcnED
+from deepod.models.time_series.ncad import NCAD
+from deepod.models.time_series.neutralTS import NeuTraLTS
 
 
 __all__ = [
-    'RCA', 'DeepSVDD', 'GOAD', 'NeuTraL', 'RDP', 'ICL', 'SLAD', 'DeepIsolationForest',
+    'RCA', 'DeepSVDD', 'GOAD', 'NeuTraL', 'NCAD', 'RDP', 'ICL', 'SLAD', 'DeepIsolationForest',
     'DeepSAD', 'DevNet', 'PReNet', 'FeaWAD', 'REPEN', 'RoSAS',
     'TimesNet', 'AnomalyTransformer', 'TranAD', 'COUTA', 'USAD', 'TcnED',
-    'DeepIsolationForestTS', 'DeepSVDDTS',
+    'DeepIsolationForestTS', 'DeepSVDDTS', 'NeuTraLTS',
     'PReNetTS', 'DeepSADTS', 'DevNetTS'
 ]
