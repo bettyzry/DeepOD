@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import os
 
 from sample_selection.ssutil import DQN_iforest, get_total_reward, test_model
+from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label, get_sub_seqs_label2
 from sample_selection.ENV import ADEnv
 
 import torch
@@ -21,7 +22,8 @@ random.seed(42)
 np.random.seed(42)
 
 Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward', 'state_index', 'next_state_index'))
+                        ('data', 'action', 'next_data', 'reward', 'state_t', 'next_state_t'))
+# self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
 
 
 class DQNSS():
@@ -30,10 +32,10 @@ class DQNSS():
     """
 
     def __init__(self, env, device='cpu',
-                 n_episodes=6, steps_per_episode=2000, max_memory=100000, eps_max=1, eps_min=0.1,
-                 eps_decay=10000, hidden_size=10, learning_rate=0.25e-4, momentum=0.95,
-                 min_squared_gradient=0.1, warmup_steps=100, gamma=0.99, batch_size=64,
-                 target_update=5000, theta_update=2000, validation_frequency=100, weight_decay=1e-3):
+                 n_episodes=6, steps_per_episode=200, max_memory=10000, eps_max=1, eps_min=0.1,
+                 eps_decay=500, hidden_size=10, learning_rate=0.25e-4, momentum=0.95,
+                 min_squared_gradient=0.1, warmup_steps=1, gamma=0.99, batch_size=64,
+                 target_update=200, theta_update=100, weight_decay=1e-3, a=0.8):
         """
         Initialize the DPLAN agent
         :param env: the environment
@@ -59,8 +61,7 @@ class DQNSS():
         self.num_warmup_steps = warmup_steps
         self.steps_per_episode = steps_per_episode
         self.max_memory_size = max_memory
-        self.target_update =target_update
-        self.validation_frequency = validation_frequency
+        self.target_update = target_update
         self.theta_update = theta_update
         self.weight_decay = weight_decay
 
@@ -75,6 +76,8 @@ class DQNSS():
         self.n_feature = self.env.n_feature  # 有错？？
         self.reset()
 
+        self.a = a
+
     def reset(self):
         self.reset_counters()
         self.reset_memory()
@@ -87,16 +90,13 @@ class DQNSS():
         # training counters and utils
         self.num_steps_done = 0
         self.episodes_total_reward = []
-        self.pr_auc_history = []
-        self.roc_auc_history = []
-        self.best_pr = None
 
     def reset_nets(self):
         # net definition
-        self.policy_net = DQN(self.n_feature, self.hidden_size, self.n_actions, device=self.device).to(self.device)
+        self.policy_net = DQN(self.n_feature, self.env.clf.seq_len, self.hidden_size, self.n_actions, device=self.device).to(self.device)
         # not sure if this works
         # self.policy_net._initialize_weights()
-        self.target_net = DQN(self.n_feature, self.hidden_size, self.n_actions, device=self.device).to(self.device)
+        self.target_net = DQN(self.n_feature, self.env.clf.seq_len, self.hidden_size, self.n_actions, device=self.device).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())       # 加载存储好的网络
         # set target net weights to 0
         with torch.no_grad():
@@ -129,10 +129,12 @@ class DQNSS():
                         math.exp(-1. * steps_done / self.EPS_DECAY)
         steps_done += 1
         if sample > eps_threshold:
-            with torch.no_grad():
+             with torch.no_grad():
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
+                # .max(1)[1]：返回最大的索引
+                # .view(1, 1): 变成1*1的格式
                 return self.policy_net(data).max(1)[1].view(1, 1)
         else:
             return torch.tensor([[self.env.action_space.sample()]], device=self.device, dtype=torch.long)
@@ -141,6 +143,7 @@ class DQNSS():
         """
         Optimize the model using the replay memory
         """
+        # self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
         if len(self.memory) < self.BATCH_SIZE:
             return
         transitions = self.memory.sample(self.BATCH_SIZE)
@@ -153,10 +156,10 @@ class DQNSS():
         # Compute a mask of non-final states and concatenate the batch elements
         # (a final state would've been the one after which simulation ended)
         non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                                batch.next_state)), device=self.device, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state
+                                                batch.next_data)), device=self.device, dtype=torch.bool)
+        non_final_next_states = torch.cat([s for s in batch.next_data
                                            if s is not None])
-        state_batch = torch.cat(batch.state)
+        state_batch = torch.cat(batch.data)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
@@ -164,7 +167,9 @@ class DQNSS():
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
         # 把一个batch的当前状态输入进去，得到预测的所有Q，并获得对应action的Q，即Q(st, at)
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)                  # 实际的Q
+        state_action_values = self.policy_net(state_batch)
+        state_action_values = state_action_values.gather(1, action_batch)                  # 实际的Q
+        # gather:从原tensor中获取指定dim和指定index的数据
 
         # Compute V(s_{t+1}) for all next states.
         # Expected values of actions for non_final_next_states are computed based
@@ -181,7 +186,6 @@ class DQNSS():
         # Compute Huber loss
         criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
-
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
@@ -192,34 +196,52 @@ class DQNSS():
     def warmup_steps(self):
         """
         Implement the warmup steps to fill the replay memory using random actions
+        核心目的是获得memory
+        self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
         """
         # 确定 param_musk，params
         importance = None
         self.env.clf.net.eval()
+        metrics = []
+        self.env.clf.init_param()
         for ii, batch_x in enumerate(self.env.clf.train_loader):
             # metric = self.get_importance_dL(batch_x, epoch, ii)
-            metric = self.env.clf.get_importance_ICLR21(batch_x, 0, ii)
+            metric = self.env.clf.get_importance_ICLR21(batch_x)
             # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
             if ii == 0:
                 importance = np.sum(metric, axis=0)
-            else:
+                metrics = metric
+            elif ii < 10:
                 importance += np.sum(metric, axis=0)
-        self.env.clf.param_musk = np.sort(importance.argsort()[:10000])  # 前10000个最重要的数据
+                metrics = np.concatenate((metrics, metric), axis=0)
+            elif ii == 10:
+                importance += np.sum(metric, axis=0)
+                metrics = np.concatenate((metrics, metric), axis=0)
+                self.env.clf.param_musk = np.sort(importance.argsort()[::-1][:1000])  # 前1000个最重要的数据
+                metrics = metrics[:, self.env.clf.param_musk]
+            else:
+                metrics = np.concatenate((metrics, metric), axis=0)
 
-        for _ in range(self.num_warmup_steps):
-            state_a, state_t = self.env.reset_state()                                    # 随机在未知数据中挑选一个点
-            data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
-            for _ in range(self.steps_per_episode):
-                action = np.random.randint(0, self.n_actions)           # 随机挑选一个行动
-                next_state_t, reward, _, _ = self.env.step(action)       # 执行这个行动
-                reward = get_total_reward(reward, self.intrinsic_rewards, state_a)
-                reward = torch.tensor([reward], device=self.device)
-                next_data = torch.tensor(self.env.train_seqs[next_state_t, :], dtype=torch.float32,
-                                           device=self.device).unsqueeze(0)
-                self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
-                # 'state', 'action', 'next_state', 'reward', 'state_index', 'next_state_index'
-                data = next_data
-                state_t = next_state_t
+        metric_torch = torch.tensor(metrics, dtype=torch.float32, device='cpu')
+        self.env.clf.iforest.fit(metric_torch)
+        self.env.reward_dis = self.env.clf.iforest.decision_function(metric_torch)
+
+        # for _ in range(self.num_warmup_steps):
+        #     state_a, state_t = self.env.reset_state()                                    # 随机在未知数据中挑选一个点
+        #     data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
+        #
+        #     for _ in range(self.steps_per_episode):
+        #         action = np.random.randint(0, self.n_actions)           # 随机挑选一个行动
+        #         next_state_t, reward, _, _ = self.env.step(action)       # 执行这个行动
+        #         reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, a=self.a)
+        #         reward = torch.tensor([reward], device=self.device)
+        #         next_data = torch.tensor(self.env.train_seqs[next_state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
+        #         self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
+        #         # 'state', 'action', 'next_state', 'reward', 'state_index', 'next_state_index'
+        #         data = next_data
+        #         state_t = next_state_t
+        #         state_a = self.env.from_st2sa(state_t)
+
 
         # for _ in range(self.num_warmup_steps):
         #     state_a, state_t = self.env.reset_state()                                    # 随机在未知数据中挑选一个点
@@ -244,7 +266,7 @@ class DQNSS():
             t1 = time.time()
             loss = self.env.clf.training(epoch)
             self.SS_fit(epoch)
-            # self.sample_selection(epoch)
+            self.sample_selection(epoch)
 
             print(f'epoch{epoch + 1:3d}, '
                   f'training loss: {loss:.6f}, '
@@ -271,14 +293,15 @@ class DQNSS():
         # perform warmup steps
         if epoch == 0:
             self.warmup_steps()
+        self.reset_counters()
 
         for i_episode in range(self.num_episodes):
             # Initialize the environment and get it's state
             reward_history = []
-            state_index_a, state_index_t = self.env.reset_state()  # 随机挑选一个未知点
+            state_a, state_t = self.env.reset_state()
             #  mantain both the obervation as the dataset index and value
             # state为初始点的具体数值
-            data = torch.tensor(self.env.train_seqs[state_index_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
+            data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
 
             for t in range(self.steps_per_episode):
                 self.num_steps_done += 1
@@ -286,27 +309,28 @@ class DQNSS():
                 # select_action encapsulates the epsilon-greedy policy
                 action = self.select_action(data, self.num_steps_done)
 
-                next_state_index, reward, _, _ = self.env.step(action.item())
+                next_state_t, reward, _, _ = self.env.step(action.item())
                 # states.append((self.env.x[observation,:],action.item()))
 
-                reward = get_total_reward(reward, self.intrinsic_rewards, state_index, write_rew=False)
+                reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, a=self.a)
 
                 reward_history.append(reward)
                 reward = torch.tensor([reward], dtype=torch.float32, device=self.device)
-                next_state = torch.tensor(self.env.x[next_state_index, :], dtype=torch.float32,
+                next_data = torch.tensor(self.env.train_seqs[next_state_t, :], dtype=torch.float32,
                                            device=self.device).unsqueeze(0)
 
                 # Store the transition in memory
-                self.memory.push(state, action, next_state, reward, state_index, next_state_index)
+                self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
 
                 # Move to the next state
-                state = next_state
-                state_index = next_state_index
+                data = next_data
+                state_t = next_state_t
+                state_a = self.env.from_st2sa(state_t)
 
                 # Perform one step of the optimization (on the policy network)
                 self.optimize_model()
 
-                # update the target network
+                    # update the target network
                 if self.num_steps_done % self.target_update == 0:
                     policy_net_state_dict = self.policy_net.state_dict()
                     self.target_net.load_state_dict(policy_net_state_dict)
@@ -315,14 +339,50 @@ class DQNSS():
 
             # because the theta^e update is equal to the duration of the episode we can update the theta^e here
             self.episodes_total_reward.append(sum(reward_history))
-
             # print the results at the end of the episode
-            avg_reward = np.mean(reward_history)
+            avg_reward = np.average(reward_history)
             print('Episode: {} \t Steps: {} \t Average episode Reward: {}'.format(i_episode, t + 1, avg_reward))
-
         print('Complete')
 
     def sample_selection(self, epoch):
+        self.policy_net.eval()
+        train_seqs = torch.tensor(self.env.train_seqs, dtype=torch.float32, device=self.device)
+        dis = self.policy_net(train_seqs).detach().cpu().numpy()
+        actions = np.argmax(dis, axis=1)        # 有问题
+        self.policy_net.train()
+
+        add_index = np.where(actions == 0)[0]
+        add_seq_starts = self.env.train_start[add_index]
+        add_seq_starts = np.sort(add_seq_starts)
+
+        delet_index = np.where(actions == 1)[0]
+        delet_seq_starts = self.env.train_start[delet_index]
+        delet_seq_starts = np.sort(delet_seq_starts)
+        self.env.train_start = np.delete(self.env.train_start, delet_seq_starts, axis=0)
+
+        for add_seq_start in add_seq_starts:
+            if add_seq_start - self.env.clf.split[0] >= 0:
+                self.env.train_start = np.append(self.env.train_start, add_seq_start - self.env.clf.split[0])
+            if add_seq_start + self.env.clf.split[1] <= len(self.env.clf.ori_data) - self.env.clf.seq_len + 1:
+                self.env.train_start = np.append(self.env.train_start, add_seq_start + self.env.clf.split[1])
+            if add_seq_start - self.env.clf.split[1] >= 0:
+                self.env.train_start = np.append(self.env.train_start, add_seq_start - self.env.clf.split[1])
+            if add_seq_start + self.env.clf.split[0] <= len(self.env.clf.ori_data) - self.env.clf.seq_len + 1:
+                self.env.train_start = np.append(self.env.train_start, add_seq_start + self.env.clf.split[0])
+
+        self.env.train_start = np.sort(self.env.train_start)
+        self.env.train_start = np.unique(self.env.train_start, axis=0)
+
+        self.env.train_seqs = np.array([self.env.x[i:i + self.env.seq_len] for i in self.env.train_start])  # 添加划分的数据
+        self.env.clf.n_samples = len(self.env.train_seqs)
+
+        y_seqs = get_sub_seqs_label2(self.env.y, seq_starts=self.env.train_start,
+                                     seq_len=self.env.seq_len) if self.env.y is not None else None
+        self.env.train_label = y_seqs
+        self.env.clf.trainsets['seqstarts' + str(epoch)] = self.env.train_start
+        if y_seqs is not None:
+            self.env.clf.trainsets['yseq' + str(epoch)] = y_seqs
+        self.env.clf.trainsets['dis' + str(epoch)] = dis
         return
     #
     # def save_model(self, model_name):

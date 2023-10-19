@@ -1,3 +1,5 @@
+import random
+
 import gym
 import numpy as np
 
@@ -21,6 +23,7 @@ class ADEnv(gym.Env):
         :param num_sample: Number of sampling for the generator g_u
         """
         super().__init__()
+        self.reward_dis = None
         self.device = device
         self.seq_len = seq_len
         self.stride = stride
@@ -41,8 +44,8 @@ class ADEnv(gym.Env):
         # state space:
         self.state_space = spaces.Discrete(self.n_samples)  # 状态空间（全部的训练集)
 
-        # action space: -1, 0 or 1
-        self.action_space = spaces.Discrete(3)  # -1删除，1扩展，0保留
+        # action space: # 0扩展，1保持，2删除
+        self.action_space = spaces.Discrete(2)  # 0扩展，1保持，2删除.0扩展1删除
 
         # initial state
         self.counts = None
@@ -53,8 +56,6 @@ class ADEnv(gym.Env):
 
         self.clf = clf
         self.init_clf()
-
-        self.iforest = IsolationForest()
 
     def init_clf(self):
         self.clf.trainsets['seqstarts0'] = self.train_start
@@ -79,9 +80,10 @@ class ADEnv(gym.Env):
         # 对状态s_t要执行action操作
         # sampling function for D_u
         # 在所有的训练集中随机采num_S个，S为采样数据in all data的索引号               # 为了效率
-        S = np.random.choice(self.train_start, self.num_sample)
+        S = np.random.choice(range(len(self.train_seqs)), self.num_sample)
         # calculate distance in the space of last hidden layer of DQN
-        all_x = self.train_seqs[S].append(self.x[s_t: s_t + self.seq_len])  # 提取全部采样点+当前位置，对应的数据的值
+        # all_x = self.train_seqs[S].append(self.x[s_a: s_a + self.seq_len])  # 提取全部采样点+当前位置，对应的数据的值
+        all_x = np.concatenate((self.train_seqs[S], [self.x[s_a: s_a + self.seq_len]]), axis=0)
 
         all_dqn_s = self.DQN.get_latent(all_x)  # 提取数据的表征
         all_dqn_s = all_dqn_s.cpu().detach().numpy()
@@ -89,26 +91,49 @@ class ADEnv(gym.Env):
         dqn_st = all_dqn_s[-1]
 
         dist = np.linalg.norm(dqn_s - dqn_st, axis=1)  # 采样数据点与当前状态st的距离
+        dist = np.average(dist, axis=1)
 
-        if action == 1:  # 扩展该数据
+        # 0扩展，1保持，2删除
+        if action == 0:  # 扩展该数据
             loc = np.argmin(dist)  # 找最像的
-        elif action == 0:  # 保留
-            loc = np.random.choice(len(self.train_seqs))
-        else:  # action == -1 # 删除该数据
+        # elif action == 1:
+        #     loc = random.randint(0, self.num_sample)
+        else:  # action == 2 # 删除该数据
             loc = np.argmax(dist)  # 找最不像的
-        return S[loc]
+        state_t = S[loc]
+        state_a = self.from_st2sa(state_t)
+        return state_a       # 返回state_a
 
-    def reward_h(self, action, state_t, epoch, ii):  # 计算reward
-        # 根据梯度密度、关键参数，确定收益，被扩展的数据的loss位置、分布
-        x = self.train_seqs[state_t, :]  # 提取一个batch的数据
-        batch_x = DataLoader(x, batch_size=1, shuffle=True, drop_last=False)
-        self.clf.net.eval()
-        metric = self.clf.get_importance_ICLR21(batch_x, epoch, ii)  # 直接计算all_v
-        self.clf.net.train()
-        metric_torch = torch.tensor(metric, dtype=torch.float32, device='cpu')
-        self.iforest.fit(metric_torch)
-        dis = self.iforest.decision_function(metric_torch)
-        return dis*action
+    # def reward_h(self, state_t, epoch, ii):  # 计算reward
+    #     batch_size = 8
+    #     # 根据关键参数，确定收益
+    #     # x = self.train_seqs[state_t:state_t+self.clf.batch_size, :]  # 提取一个batch的数据
+    #     state_a = self.from_st2sa(state_t)
+    #     if state_a < int(batch_size/2):
+    #         start = 0
+    #         end = batch_size
+    #     elif state_a > self.n_samples-int(batch_size/2):
+    #         start = self.n_samples-batch_size-1
+    #         end = self.n_samples
+    #     else:
+    #         start = state_a-int(batch_size/2)
+    #         end = state_a+int(batch_size/2)
+    #
+    #     x = np.array([self.x[i: i + self.seq_len] for i in np.arange(start, end, 1)])
+    #     loader = DataLoader(x, batch_size=batch_size, shuffle=True, drop_last=False)
+    #     self.clf.net.eval()
+    #     for ii, batch_x in enumerate(loader):
+    #         metric = self.clf.get_importance_ICLR21(batch_x, epoch, ii)  # 直接计算all_v
+    #
+    #     # x = self.train_seqs[state_t, :]  # 提取一个batch的数据
+    #     # batch_x = torch.tensor(x, dtype=torch.float32, device='gpu')
+    #     # metric = self.clf.get_importance_ICLR21(batch_x, epoch, ii)  # 直接计算all_v
+    #     self.clf.net.train()
+    #     metric_torch = torch.tensor(metric, dtype=torch.float32, device='cpu')
+    #     self.clf.iforest.fit(metric_torch)
+    #     dis = self.clf.iforest.decision_function(metric_torch)
+    #     dis = np.average(dis)
+    #     return dis
 
         # threshold2 = percentile(self.loss, 0.2)
         # threshold8 = percentile(self.loss, 0.8)
@@ -145,7 +170,8 @@ class ADEnv(gym.Env):
         self.counts += 1
 
         # calculate the reward
-        reward = self.reward_h(action, state_t, -1)  # 当前的行为能获得多大的收益
+        # reward = self.reward_h(state_t, -1, 0)  # 当前的行为能获得多大的收益
+        reward = self.reward_dis[state_t]  # 当前的行为能获得多大的收益
 
         # done: whether terminal or not
         done = False
@@ -153,7 +179,7 @@ class ADEnv(gym.Env):
         # info
         info = {"State t": state_a, "Action t": action, "State t+1": state_a1}
 
-        return self.state_a, reward, done, info
+        return self.state_t, reward, done, info
 
     def reset_state(self):
         # reset the status of environment

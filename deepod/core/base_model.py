@@ -513,10 +513,11 @@ class BaseDeepAD(metaclass=ABCMeta):
             importance = None
             metrics = np.array([])
             self.net.eval()
+            self.init_param()
             for ii, batch_x in enumerate(self.train_loader):
-                # metric = self.get_importance_dL(batch_x, epoch, ii)
-                metric = self.get_importance_ICLR21(batch_x, epoch, ii)
-                # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
+                # metric = self.get_importance_dL(batch_x)
+                metric = self.get_importance_ICLR21(batch_x)
+                # metric = self.get_importance_ICML17(batch_x)       # 巨慢
 
                 if epoch == 0:
                     if ii == 0:
@@ -537,7 +538,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.net.train()
 
             if epoch == 0:
-                self.param_musk = np.sort(importance.argsort()[:10000])     # 前10000个最重要的数据
+                self.param_musk = np.sort(importance.argsort()[::-1][:10000])     # 前10000个最重要的数据
                 # self.true_key_param = importance[self.param_musk] / len(self.train_data)
             else:
                 # importance = np.sum(metrics, axis=0) / len(self.train_data)
@@ -565,11 +566,11 @@ class BaseDeepAD(metaclass=ABCMeta):
                 for add_seq_start in add_seq_starts:
                     if add_seq_start - self.split[0] >= 0:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start - self.split[0])
-                    if add_seq_start + self.split[1] <= self.n_samples - self.seq_len + 1:
+                    if add_seq_start + self.split[1] <= len(self.ori_data) - self.seq_len + 1:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start + self.split[1])
                     if add_seq_start - self.split[1] >= 0:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start - self.split[1])
-                    if add_seq_start + self.split[0] <= self.n_samples - self.seq_len + 1:
+                    if add_seq_start + self.split[0] <= len(self.ori_data) - self.seq_len + 1:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start + self.split[0])
 
                 self.seq_starts = np.sort(self.seq_starts)
@@ -586,67 +587,23 @@ class BaseDeepAD(metaclass=ABCMeta):
                 if y_seqs is not None:
                     self.trainsets['yseq' + str(epoch)] = y_seqs
                 self.trainsets['dis' + str(epoch)] = dis
-
-        elif self.sample_selection == 1:        # 我的方法 特别测试
-            if len(self.train_data) <= int(self.n_samples * 0.5):
-                return
-
-            dis = np.zeros(len(self.train_data))
-            value = np.zeros(len(self.train_data))
-            num = np.zeros(len(self.train_data))
-            importance = None
-            self.net.eval()
-            for ii, batch_x in enumerate(self.train_loader):
-                # metric = self.get_importance_dL(batch_x, epoch, ii)
-                metric = self.get_importance_ICLR21(batch_x, epoch, ii)
-                # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
-
-                if ii == 0:
-                    importance = np.sum(metric, axis=0)
-                    thresh = importance[importance.argsort()[int(len(importance) * 0.4)]]/self.batch_size
-                else:
-                    importance = importance + np.sum(metric, axis=0)
-
-                if epoch != 0:  # 非第一轮迭代，计算距离
-                    dis[ii*self.batch_size: (ii+1)*self.batch_size] = np.linalg.norm(self.true_key_param-metric, axis=1, ord=np.Inf) # L2范数
-                    # num[ii*self.batch_size: (ii+1)*self.batch_size] = metric
-                value[ii*self.batch_size: (ii+1)*self.batch_size] = np.sum(metric, axis=1)
-                num[ii*self.batch_size: (ii+1)*self.batch_size] = [sum(m > thresh) for m in metric]
-            self.net.train()
-
-            if epoch == 0:
-                self.param_musk = np.sort(importance.argsort()[:10000])     # 前10000个最重要的数据
-            else:
-                # 待修改，根据重要参数，调整波动
-                delet_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.2))        # 每次删除的数据量
-                index = dis.argsort()[::-1][:delet_num]  # 删除距离最大的20%
-                self.train_data = np.delete(self.train_data, index, axis=0)         # 删除指定行
-                self.train_label = np.delete(self.train_label, index, axis=0)
-
-                self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
-                                               shuffle=True, pin_memory=True)
-
-                self.trainsets['yseq' + str(epoch)] = self.train_label
-
-            importance = importance[self.param_musk]
-            self.true_key_param = importance/len(self.train_data)
-            self.trainsets['dis' + str(epoch)] = dis
-            self.trainsets['value' + str(epoch)] = value
-            self.trainsets['num' + str(epoch)] = num
         else:
             print('ERROR')
 
-    def get_importance_dL(self, batch_x, epoch, ii):
-        _, losses = self.inference_forward(batch_x, self.net, self.criterion)
-        gv_metric = []
-
-        if epoch == 0 and ii == 0:             # 是第一个batch，更新all_v
+    def init_param(self):
+        for ii, batch_x in enumerate(self.train_loader):
+            _, losses = self.inference_forward(batch_x, self.net, self.criterion)
             params = [p for p in self.net.parameters() if p.requires_grad]
             loss = losses[0]
             g_loss = grad(loss, params, create_graph=True, allow_unused=True)
             for jj, g in enumerate(g_loss):
                 if g is not None:
                     self.params.append(params[jj])
+            return
+
+    def get_importance_dL(self, batch_x):
+        _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+        gv_metric = []
 
         for jj, loss in enumerate(losses):
             # 有提速空间 #
@@ -663,21 +620,12 @@ class BaseDeepAD(metaclass=ABCMeta):
         # gv_metric = normalize(gv_metric, axis=1, norm='l2')   # 对metric按行进行归一化
         return gv_metric
 
-    def get_importance_ICLR21(self, batch_x, epoch, ii):
+    def get_importance_ICLR21(self, batch_x):
         _, losses = self.inference_forward(batch_x, self.net, self.criterion)
-
-        if ii == 0:             # 是第一个batch，更新all_v
-            if epoch != 0:      # 不是第一轮迭代
-                self.all_v = np.concatenate([param.data.view(-1).cpu().detach().numpy() for param in self.params])[
-                    self.param_musk]
-            else:
-                params = [p for p in self.net.parameters() if p.requires_grad]
-                loss = losses[0]
-                g_loss = grad(loss, params, create_graph=True, allow_unused=True)
-                for jj, g in enumerate(g_loss):
-                    if g is not None:
-                        self.params.append(params[jj])
-                self.all_v = torch.cat([param.data.view(-1) for param in self.params]).cpu().detach().numpy()
+        self.all_v = np.concatenate([param.data.view(-1).cpu().detach().numpy() for param in self.params])
+        if self.param_musk is not None:
+            self.all_v = np.concatenate([param.data.view(-1).cpu().detach().numpy() for param in self.params])[
+                self.param_musk]
 
         gv_metric = []
         for jj, loss in enumerate(losses):
@@ -695,15 +643,8 @@ class BaseDeepAD(metaclass=ABCMeta):
         metric = normalize(metric, axis=1, norm='l2')   # 对metric按行进行归一化
         return metric
 
-    def get_importance_ICML17(self, batch_x, epoch, ii):
+    def get_importance_ICML17(self, batch_x):
         _, losses = self.inference_forward(batch_x, self.net, self.criterion)
-        if epoch == 0 and ii == 0:
-            params = [p for p in self.net.parameters() if p.requires_grad]
-            loss = losses[0]
-            g_loss = grad(loss, params, create_graph=True, allow_unused=True)
-            for jj, g in enumerate(g_loss):
-                if g is not None:
-                    self.params.append(params[jj])
 
         size = len(batch_x)
         metric = []

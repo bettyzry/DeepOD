@@ -46,7 +46,7 @@ parser.add_argument("--model", type=str, default='TranAD',
                     help="TcnED, TimesNet, TranAD, AnomalyTransformer"
                     )
 
-parser.add_argument('--silent_header', type=bool, default=False)
+parser.add_argument('--silent_header', type=bool, default=True)
 parser.add_argument("--flag", type=str, default='')
 parser.add_argument("--note", type=str, default='')
 
@@ -120,7 +120,7 @@ def main():
             # train_data, train_labels, test_data, labels = insert_pollution_new(test_data, labels, args.rate)
             # train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
             # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
-            train_data, train_labels = insert_outlier(train_data, 10, 'variance')
+            # train_data, train_labels = insert_outlier(train_data, 10, 'variance')
 
             entries = []
             t_lst = []
@@ -132,18 +132,18 @@ def main():
                 clf.sample_selection = args.sample_selection
                 # clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
                 # clf.fit(train_data, train_labels, test_data, labels)
-                clf.fit(train_data, None, test_data, labels)
+                # clf.fit(train_data, None, test_data, labels)
                 # clf.fit(test_data, labels)
                 # clf.fit(train_data, labels)
 
-                # env = ADEnv(
-                #     dataset=train_data,
-                #     y=None,
-                #     clf=clf,
-                #     num_sample=1000
-                # )
-                # dqnss = DQNSS(env)
-                # dqnss.OD_fit(test_data, labels)
+                env = ADEnv(
+                    dataset=train_data,
+                    y=None,
+                    clf=clf,
+                    num_sample=1000
+                )
+                dqnss = DQNSS(env)
+                dqnss.OD_fit(test_data, labels)
 
                 t = time.time() - t1
 
