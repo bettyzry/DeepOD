@@ -21,7 +21,7 @@ import time
 
 
 class NeuTraLTS(BaseDeepAD):
-    def __init__(self, epochs=100, batch_size=64, lr=1e-3,
+    def __init__(self, epochs=100, batch_size=64, lr=0.001, seq_len=30, stride=1,
                  n_trans=11, trans_type='residual', temp=0.1,
                  hidden_dims='100,50', trans_hidden_dims=50,
                  act='LeakyReLU', bias=False, train_val_pc=0.25, dropout=0.0,
@@ -30,7 +30,7 @@ class NeuTraLTS(BaseDeepAD):
         super(NeuTraLTS, self).__init__(
             model_name='NeuTraL', data_type='ts', epochs=epochs, batch_size=batch_size, lr=lr,
             epoch_steps=epoch_steps, prt_steps=prt_steps, device=device,
-            verbose=verbose, random_state=random_state
+            verbose=verbose, random_state=random_state, seq_len=seq_len, stride=stride
         )
 
         self.n_trans = n_trans
@@ -142,14 +142,16 @@ class NeuTraLTS(BaseDeepAD):
         return scores_pad
 
     def training(self, epoch):
-
         self.net.train()
         loss_lst = []
+        self.net.zero_grad()
         for ii, x0 in enumerate(self.train_loader):
             x0 = x0.float().to(self.device)
 
             x0_output = self.net(x0)
             loss = self.criterion(x0_output)
+
+            loss.backward()
 
             if self.sample_selection == 5:  # ICML21
                 to_concat_g = []
@@ -174,9 +176,8 @@ class NeuTraLTS(BaseDeepAD):
                     mask = (torch.abs(param.data * param.grad.data) >= thresh).type(torch.cuda.FloatTensor)
                     mask = mask * clip
                     param.grad.data = mask * param.grad.data
-            self.net.zero_grad()
-            loss.backward()
             self.optimizer.step()
+            self.net.zero_grad()
 
             loss_lst.append(loss)
 
@@ -189,8 +190,10 @@ class NeuTraLTS(BaseDeepAD):
         return
 
     def inference_forward(self, batch_x, net, criterion):
-        """define forward step in inference"""
-        return
+        batch_x = batch_x.float().to(self.device)
+        output = net(batch_x)
+        error = DCL(temperature=self.temp, reduction='none')(output)
+        return output, error
 
     def training_prepare(self, X, y):
         self.train_loader = DataLoader(dataset=SubseqData(X),
@@ -305,8 +308,8 @@ class TabNeutralADNet(torch.nn.Module):
                 x_transform[:, i] = mask + x
 
         x_cat = torch.cat([x.unsqueeze(1), x_transform], 1)
-        zs = self.enc(x_cat.reshape(-1, x.shape[1], x.shape[2]))
-        zs = zs.reshape(x.shape[0], self.n_trans+1, self.z_dim)
+        zs = self.enc(x_cat.reshape(-1, x.shape[2], x.shape[1])).transpose(2, 1)[:, -1]
+        zs = zs.reshape(-1, self.n_trans+1, self.z_dim)
         return zs
 
 

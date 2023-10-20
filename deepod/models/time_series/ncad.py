@@ -12,8 +12,11 @@ import numpy as np
 from numpy.random import RandomState
 
 import torch.nn.functional as F
+import time
 
 from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label
+from testbed.utils import import_ts_data_unsupervised
+from deepod.metrics import ts_metrics, point_adjustment
 
 
 class NCAD(BaseDeepAD):
@@ -115,8 +118,7 @@ class NCAD(BaseDeepAD):
 
         return
 
-
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, Xtest=None, Ytest=None, X_seqs=None, y_seqs=None):
         """
         Fit detector. y is ignored in unsupervised methods.
 
@@ -134,38 +136,47 @@ class NCAD(BaseDeepAD):
         self : object
             Fitted estimator.
         """
-        self.n_features = X.shape[1]
-        print(X.shape)
-        sequences = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
-        print(sequences.shape)
-        sequences = sequences[RandomState(42).permutation(len(sequences))]
-
-        if self.train_val_pc > 0:
-            train_seqs = sequences[: -int(self.train_val_pc * len(sequences))]
-            val_seqs = sequences[-int(self.train_val_pc * len(sequences)):]
+        if X_seqs is not None and y_seqs is not None:
+            pass
         else:
-            train_seqs = sequences
-            val_seqs = None
+            if self.sample_selection == 4 or self.sample_selection == 7:
+                self.ori_data = X
+                self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
+                self.trainsets['seqstarts0'] = self.seq_starts
+                X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
+                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
+            else:
+                X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
+        self.train_data = X_seqs
+        self.train_label = y_seqs
+        self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
+        if self.train_label is not None:
+            self.trainsets['yseq0'] = self.train_label
+            self.ori_label = y
 
-        print(train_seqs.shape)
+        self.training_prepare(self.train_data, y=self.train_label)
+        for epoch in range(self.epochs):
+            t1 = time.time()
+            loss = self.training(epoch)
+            self.do_sample_selection(epoch)
 
-        self.net = NCADNet(
-            input_dim=self.n_features,
-            hidden_dims=self.hidden_dims,
-            kernel_size=self.kernel_size,
-            dropout=self.dropout,
-            bias=self.bias
-        )
-        self.net.to(self.device)
+            print(f'epoch{epoch + 1:3d}, '
+                  f'training loss: {loss:.6f}, '
+                  f'time: {time.time() - t1:.1f}s')
 
-        self.net = self.train(self.net, train_seqs, val_seqs)
-
-
-        self.decision_scores_ = self.decision_function(X)
-        self.labels_ = self._process_decision_scores()
+            if Xtest is not None and Ytest is not None:
+                self.net.eval()
+                scores = self.decision_function(Xtest)
+                eval_metrics = ts_metrics(Ytest, scores)
+                adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
+                result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
+                          adj_eval_metrics[2]]
+                print(result)
+                self.result_detail.append(result)
+                self.net.train()
 
         return
-
 
     def decision_function(self, X, return_rep=False):
         """
@@ -203,164 +214,121 @@ class NCAD(BaseDeepAD):
 
         return scores_pad
 
-
-    def train(self, net, train_seqs, val_seqs=None):
-        num_train, num_val = len(train_seqs), len(val_seqs)
-        print(num_train, num_val)
-
-        y_train, y_val = np.zeros(num_train), np.zeros(num_val)
-
-        val_dataset = TensorDataset(torch.from_numpy(val_seqs).float(),
-                                      torch.from_numpy(y_val).long())
-
-        val_loader = DataLoader(val_dataset, batch_size=self.batch_size, drop_last=False,
-                                  shuffle=False) if val_seqs is not None else None
-
-
-        optimizer = torch.optim.Adam(net.parameters(), lr=self.lr)
-        criterion = NCADLoss(reduction='none')
-        net.train()
-
-        for i in range(self.epochs):
-            train_dataset = TensorDataset(torch.from_numpy(train_seqs).float(),
-                                          torch.from_numpy(y_train).long())
-
-            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, drop_last=True, pin_memory=True,
-                                      shuffle=True)
-            loss_lst = []
-            for x0, y0 in train_loader:
-
-                if self.coe_rate > 0:
-                    x_oe, y_oe = coe_batch(
-                        x=x0.transpose(2, 1),
-                        y=y0,
-                        coe_rate=self.coe_rate,
-                        suspect_window_length=self.s_length,
-                        random_start_end=True,
-                    )
-                    # Add COE to training batch
-                    x0 = torch.cat((x0, x_oe.transpose(2, 1)), dim=0)
-                    y0 = torch.cat((y0, y_oe), dim=0)
-
-                if self.mixup_rate > 0.0:
-                    x_mixup, y_mixup = mixup_batch(
-                        x=x0.transpose(2, 1),
-                        y=y0,
-                        mixup_rate=self.mixup_rate,
-                    )
-                    # Add Mixup to training batch
-                    x0 = torch.cat((x0, x_mixup.transpose(2, 1)), dim=0)
-                    y0 = torch.cat((y0, y_mixup), dim=0)
-
-                x0 = x0.float().to(self.device)
-                y0 = y0.float().to(self.device)
-                x_c = x0[:, :-self.s_length]
-
-                x0_output, xc_output = net(x0, x_c)
-
-                x0_output, xc_output = F.normalize(x0_output), F.normalize(xc_output)
-
-                logits_anomaly = criterion(x0_output, xc_output)#.squeeze()
-
-                probs_anomaly = torch.sigmoid(logits_anomaly)
-                # Calculate Loss
-                loss = torch.nn.BCELoss()(probs_anomaly, y0)
-                net.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-                loss_lst.append(loss)
-
-            epoch_loss = torch.mean(torch.stack(loss_lst)).data.cpu().item()
-
-            # validation phase
-            val_loss = np.NAN
-            if val_seqs is not None:
-                val_loss = []
-                with torch.no_grad():
-                    for x, y in val_loader:
-                        x = x.float().to(self.device)
-                        x_c = x[:, :-self.s_length]
-                        x_out, xc_out = net(x, x_c)
-
-                        logits_anomaly = criterion(x_out, xc_out)#.squeeze()
-                        loss = torch.sigmoid(logits_anomaly)
-                        loss = torch.mean(loss)
-                        val_loss.append(loss)
-                val_loss = torch.mean(torch.stack(val_loss)).data.cpu().item()
-
-            if (i + 1) % self.prt_steps == 0:
-                print(
-                    f'|>>> epoch: {i + 1:02}  |   loss: {epoch_loss:.6f}, '
-                    # f'loss_oc: {epoch_loss_oc:.6f}, '
-                    f'val_loss: {val_loss:.6f}'
+    def training(self, epoch):
+        self.net.train()
+        loss_lst = []
+        for x0 in self.train_loader:
+            y0 = np.zeros(x0.shape[0])
+            y0 = torch.tensor(y0)
+            if self.coe_rate > 0:
+                x_oe, y_oe = coe_batch(
+                    x=x0.transpose(2, 1),
+                    y=y0,
+                    coe_rate=self.coe_rate,
+                    suspect_window_length=self.s_length,
+                    random_start_end=True,
                 )
+                # Add COE to training batch
+                x0 = torch.cat((x0, x_oe.transpose(2, 1)), dim=0)
+                y0 = torch.cat((y0, y_oe), dim=0)
 
-        return net
+            if self.mixup_rate > 0.0:
+                x_mixup, y_mixup = mixup_batch(
+                    x=x0.transpose(2, 1),
+                    y=y0,
+                    mixup_rate=self.mixup_rate,
+                )
+                # Add Mixup to training batch
+                x0 = torch.cat((x0, x_mixup.transpose(2, 1)), dim=0)
+                y0 = torch.cat((y0, y_mixup), dim=0)
+
+            x0 = x0.float().to(self.device)
+            y0 = y0.float().to(self.device)
+            x_c = x0[:, :-self.s_length]
+
+            x0_output, xc_output = self.net(x0, x_c)
+
+            x0_output, xc_output = F.normalize(x0_output), F.normalize(xc_output)
+
+            logits_anomaly = self.criterion(x0_output, xc_output)  # .squeeze()
+
+            probs_anomaly = torch.sigmoid(logits_anomaly)
+            # Calculate Loss
+            loss = torch.nn.BCELoss()(probs_anomaly, y0)
+            self.net.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            loss_lst.append(loss)
+
+        epoch_loss = torch.mean(torch.stack(loss_lst)).data.cpu().item()
+        return epoch_loss
 
     def training_forward(self, batch_x, net, criterion):
         """define forward step in training"""
         return
 
-    def inference_forward(self, batch_x, net, criterion):
-        """define forward step in inference"""
-        return
+    def inference_forward(self, x0, net, criterion):
+        y0 = np.zeros(x0.shape[0])
+        y0 = torch.tensor(y0)
+        if self.coe_rate > 0:
+            x_oe, y_oe = coe_batch(
+                x=x0.transpose(2, 1),
+                y=y0,
+                coe_rate=self.coe_rate,
+                suspect_window_length=self.s_length,
+                random_start_end=True,
+            )
+            # Add COE to training batch
+            x0 = torch.cat((x0, x_oe.transpose(2, 1)), dim=0)
+            y0 = torch.cat((y0, y_oe), dim=0)
+
+        if self.mixup_rate > 0.0:
+            x_mixup, y_mixup = mixup_batch(
+                x=x0.transpose(2, 1),
+                y=y0,
+                mixup_rate=self.mixup_rate,
+            )
+            # Add Mixup to training batch
+            x0 = torch.cat((x0, x_mixup.transpose(2, 1)), dim=0)
+            y0 = torch.cat((y0, y_mixup), dim=0)
+
+        x0 = x0.float().to(self.device)
+        y0 = y0.float().to(self.device)
+        x_c = x0[:, :-self.s_length]
+
+        x0_output, xc_output = self.net(x0, x_c)
+
+        x0_output, xc_output = F.normalize(x0_output), F.normalize(xc_output)
+
+        logits_anomaly = self.criterion(x0_output, xc_output)  # .squeeze()
+
+        probs_anomaly = torch.sigmoid(logits_anomaly)
+        # Calculate Loss
+        loss = torch.nn.BCELoss(reduction='none')(probs_anomaly, y0)
+        loss = loss.mean(axis=1)
+        return y0, loss
 
     def training_prepare(self, X, y):
-        """define train_loader, net, and criterion"""
+        self.train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=False)
+
+        self.net = NCADNet(
+            input_dim=self.n_features,
+            hidden_dims=self.hidden_dims,
+            kernel_size=self.kernel_size,
+            dropout=self.dropout,
+            bias=self.bias
+        ).to(self.device)
+
+        self.criterion = NCADLoss(reduction='none')
+
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=self.lr)
+
         return
 
     def inference_prepare(self, X):
         """define test_loader"""
         return
-
-
-    def get_sub_seqs(self, x_arr):
-        """
-
-        Parameters
-        ----------
-        x_arr: np.array, required
-            input original data with shape [time_length, channels]
-
-        Returns
-        -------
-        x_seqs: np.array
-            Split sub-sequences of input time-series data
-        """
-        seq_len = self.seq_len
-        stride = self.stride
-
-        seq_starts = np.arange(0, x_arr.shape[0] - seq_len + 1, stride)
-        x_seqs = np.array([x_arr[i:i + seq_len] for i in seq_starts])
-
-        return x_seqs
-
-    def get_sub_seqs_label(self, y):
-        """
-
-        Parameters
-        ----------
-        y: np.array, required
-            data labels
-
-        Returns
-        -------
-        y_seqs: np.array
-            Split label of each sequence
-        """
-        seq_len = self.seq_len
-        stride = self.stride
-
-        seq_starts = np.arange(0, y.shape[0] - seq_len + 1, stride)
-        ys = np.array([y[i:i + seq_len] for i in seq_starts])
-        ys = np.array([a[-self.s_length:] for a in ys])
-
-        y = np.sum(ys, axis=1) / seq_len
-
-        y_binary = np.zeros_like(y)
-        y_binary[np.where(y!=0)[0]] = 1
-        return y_binary
 
 
 def coe_batch(x: torch.Tensor, y: torch.Tensor, coe_rate: float, suspect_window_length: int,
@@ -459,6 +427,7 @@ def mixup_batch(x: torch.Tensor, y: torch.Tensor, mixup_rate: float):
 
     return x_mixup, y_mixup
 
+
 class NCADNet(torch.nn.Module):
     def __init__(self, input_dim, hidden_dims=32, kernel_size=2, dropout=0.2,
                  bias=True):
@@ -491,6 +460,7 @@ class NCADNet(torch.nn.Module):
 
         return x_out, xc_out
 
+
 class NCADLoss(torch.nn.Module):
     """
 
@@ -520,9 +490,6 @@ class NCADLoss(torch.nn.Module):
         log_prob_different = torch.log(prob_different)
 
         loss = log_prob_different - log_prob_equal
-
-
-
         reduction = self.reduction
         if reduction == 'mean':
             return torch.mean(loss)
@@ -533,9 +500,6 @@ class NCADLoss(torch.nn.Module):
 
 
 if __name__ == '__main__':
-    from testbed.utils import import_ts_data_unsupervised
-    from deepod.metrics import ts_metrics, point_adjustment
-
     data_dir = '/home/xuhz/dataset/5-TSdata/_processed_data/'
     # data = 'ASD'
     # entities = 'omi-2,omi-5,omi-6,omi-11'   #ASD

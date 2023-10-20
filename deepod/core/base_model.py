@@ -566,9 +566,9 @@ class BaseDeepAD(metaclass=ABCMeta):
                 for add_seq_start in add_seq_starts:
                     if add_seq_start - self.split[0] >= 0:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start - self.split[0])
-                    if add_seq_start + self.split[1] <= len(self.ori_data) - self.seq_len + 1:
+                    if add_seq_start + self.split[1] < len(self.ori_data) - self.seq_len + 1:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start + self.split[1])
-                    if add_seq_start - self.split[1] >= 0:
+                    if add_seq_start - self.split[1] > 0:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start - self.split[1])
                     if add_seq_start + self.split[0] <= len(self.ori_data) - self.seq_len + 1:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start + self.split[0])
