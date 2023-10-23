@@ -5,6 +5,7 @@ from sklearn.metrics import PrecisionRecallDisplay
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+from sklearn import preprocessing
 
 
 def DQN_iforest(x, model):
@@ -15,21 +16,33 @@ def DQN_iforest(x, model):
     latent_x = latent_x.cpu().detach().numpy()
     # calculate anomaly scores in the latent space
     iforest = IsolationForest().fit(latent_x)
-    scores = iforest.decision_function(latent_x)
+    scores = -iforest.decision_function(latent_x)
     # normalize the scores
-    norm_scores = np.array([-1 * s + 0.5 for s in scores])
+    # scores = np.array([-1 * s + 0.5 for s in scores])
+    # 异常分数归一化
+    _range = np.max(scores) - np.min(scores)
+    norm_scores = (scores - np.min(scores)) / _range
     return norm_scores
 
 
-def get_total_reward(action, reward_e, intrinsic_rewards, state_a, write_rew=False, a=0.5):
+def get_total_reward(action, reward_e, intrinsic_rewards, state_a, e, i, write_rew=False, a=0.5):
     if torch.is_tensor(action):
         action = action.numpy()[0][0]
     reward_i = intrinsic_rewards[state_a]
     if write_rew:
         write_reward('./results/rewards.csv', reward_i, reward_e)
-    score = a*reward_e + (1-a)*reward_i
     # 0扩展，1保持，2删除
-    return action*score + (1-action) * (1-score)
+    if action == 0:
+        reward_e = (2 * e - reward_e)
+        reward_i = reward_i
+    elif action == 1:
+        reward_e = (2 * e - reward_e)
+        reward_i = (2 * i - reward_i)
+    else:
+        reward_e = reward_e
+        reward_i = i
+    reward = a * reward_e + (1 - a) * reward_i
+    return reward
 
 
 def plot_roc_pr(test_set, policy_net):

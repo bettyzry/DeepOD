@@ -541,12 +541,15 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.param_musk = np.sort(importance.argsort()[::-1][:10000])     # 前10000个最重要的数据
                 # self.true_key_param = importance[self.param_musk] / len(self.train_data)
             else:
+                metric_torch = torch.tensor(metrics, dtype=torch.float32, device='cpu')
+                # self.iforest.fit(metric_torch)
+                # dis = -self.iforest.decision_function(metric_torch)
+                iforest = IsolationForest()
+                iforest.fit(metric_torch)
+                dis = -iforest.decision_function(metric_torch)
+
                 # importance = np.sum(metrics, axis=0) / len(self.train_data)
                 # self.true_key_param = importance
-
-                metric_torch = torch.tensor(metrics, dtype=torch.float32, device='cpu')
-                self.iforest.fit(metric_torch)
-                dis = self.iforest.decision_function(metric_torch)
                 # dis = np.linalg.norm(importance - metrics, axis=1, ord=np.Inf)
 
                 # metrics = np.insert(metrics, 0, self.train_label, axis=1)
@@ -600,6 +603,20 @@ class BaseDeepAD(metaclass=ABCMeta):
                 if g is not None:
                     self.params.append(params[jj])
             return
+
+    def init_param_musk(self):
+        importance = None
+        for ii, batch_x in enumerate(self.train_loader):
+            _, losses = self.inference_forward(batch_x, self.net, self.criterion)
+            metric = self.get_importance_ICLR21(batch_x)
+            # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
+            if ii == 0:
+                importance = np.sum(metric, axis=0)
+            elif ii <= 10:
+                importance += np.sum(metric, axis=0)
+            else:
+                break
+        self.param_musk = np.sort(importance.argsort()[::-1][:1000])  # 前1000个最重要的数据
 
     def get_importance_dL(self, batch_x):
         _, losses = self.inference_forward(batch_x, self.net, self.criterion)

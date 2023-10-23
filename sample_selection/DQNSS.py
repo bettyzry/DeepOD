@@ -5,6 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
+import pandas as pd
+
 from sample_selection.ssutil import DQN_iforest, get_total_reward, test_model
 from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label, get_sub_seqs_label2
 from sample_selection.ENV import ADEnv
@@ -31,7 +33,7 @@ class DQNSS():
     DPLAN agent that encapsulates the training and testing of the DQN
     """
 
-    def __init__(self, env, device='cpu',
+    def __init__(self, env, rate=0.1, device='cpu',
                  n_episodes=6, steps_per_episode=200, max_memory=10000, eps_max=1, eps_min=0.1,
                  eps_decay=500, hidden_size=10, learning_rate=0.25e-4, momentum=0.95,
                  min_squared_gradient=0.1, warmup_steps=1, gamma=0.99, batch_size=64,
@@ -46,6 +48,7 @@ class DQNSS():
         """
         self.device = device
         self.env = env
+        self.rate = (1-rate)*100
 
         # hyperparameters setup
         self.hidden_size = hidden_size
@@ -107,6 +110,7 @@ class DQNSS():
         self.env.DQN = self.policy_net
         # setting up the environment's intrinsic reward as function of netwo rk's theta_e (i.e. the hidden layer)
         self.intrinsic_rewards = DQN_iforest(self.x_tensor, self.policy_net)            # 计算不同x的异常分数，即他们的孤立性
+        self.i = np.percentile(self.intrinsic_rewards, self.rate)
 
         # setting the rmsprop optimizer
         self.optimizer = optim.RMSprop(                                      # 优化器
@@ -193,70 +197,35 @@ class DQNSS():
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-    def warmup_steps(self):
+    def get_reward_dis(self):
+        self.env.clf.net.eval()
+        metrics = []
+        for ii, batch_x in enumerate(self.env.clf.train_loader):
+            # metric = self.get_importance_dL(batch_x, epoch, ii)
+            metric = self.env.clf.get_importance_ICLR21(batch_x)
+            # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
+            if ii == 0:
+                metrics = metric
+            else:
+                metrics = np.concatenate((metrics, metric), axis=0)
+
+        metric_torch = torch.tensor(metrics, dtype=torch.float32, device='cpu')
+        self.env.clf.iforest.fit(metric_torch)
+        reward_dis = -self.env.clf.iforest.decision_function(metric_torch)
+        _range = np.max(reward_dis) - np.min(reward_dis)
+        reward_dis = (reward_dis - np.min(reward_dis)) / _range
+        self.env.reward_dis = reward_dis
+        self.env.e = np.percentile(reward_dis, self.rate)
+
+    def Init_params(self):
         """
         Implement the warmup steps to fill the replay memory using random actions
         核心目的是获得memory
         self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
         """
         # 确定 param_musk，params
-        importance = None
-        self.env.clf.net.eval()
-        metrics = []
         self.env.clf.init_param()
-        for ii, batch_x in enumerate(self.env.clf.train_loader):
-            # metric = self.get_importance_dL(batch_x, epoch, ii)
-            metric = self.env.clf.get_importance_ICLR21(batch_x)
-            # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
-            if ii == 0:
-                importance = np.sum(metric, axis=0)
-                metrics = metric
-            elif ii < 10:
-                importance += np.sum(metric, axis=0)
-                metrics = np.concatenate((metrics, metric), axis=0)
-            elif ii == 10:
-                importance += np.sum(metric, axis=0)
-                metrics = np.concatenate((metrics, metric), axis=0)
-                self.env.clf.param_musk = np.sort(importance.argsort()[::-1][:1000])  # 前1000个最重要的数据
-                metrics = metrics[:, self.env.clf.param_musk]
-            else:
-                metrics = np.concatenate((metrics, metric), axis=0)
-
-        metric_torch = torch.tensor(metrics, dtype=torch.float32, device='cpu')
-        self.env.clf.iforest.fit(metric_torch)
-        self.env.reward_dis = self.env.clf.iforest.decision_function(metric_torch)
-
-        # for _ in range(self.num_warmup_steps):
-        #     state_a, state_t = self.env.reset_state()                                    # 随机在未知数据中挑选一个点
-        #     data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
-        #
-        #     for _ in range(self.steps_per_episode):
-        #         action = np.random.randint(0, self.n_actions)           # 随机挑选一个行动
-        #         next_state_t, reward, _, _ = self.env.step(action)       # 执行这个行动
-        #         reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, a=self.a)
-        #         reward = torch.tensor([reward], device=self.device)
-        #         next_data = torch.tensor(self.env.train_seqs[next_state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
-        #         self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
-        #         # 'state', 'action', 'next_state', 'reward', 'state_index', 'next_state_index'
-        #         data = next_data
-        #         state_t = next_state_t
-        #         state_a = self.env.from_st2sa(state_t)
-
-
-        # for _ in range(self.num_warmup_steps):
-        #     state_a, state_t = self.env.reset_state()                                    # 随机在未知数据中挑选一个点
-        #     data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
-        #     for _ in range(self.steps_per_episode):
-        #         action = np.random.randint(0, self.n_actions)           # 随机挑选一个行动
-        #         next_state_t, reward, _, _ = self.env.step(action)       # 执行这个行动
-        #         reward = get_total_reward(reward, self.intrinsic_rewards, state_a)
-        #         reward = torch.tensor([reward], device=self.device)
-        #         next_data = torch.tensor(self.env.train_seqs[next_state_t, :], dtype=torch.float32,
-        #                                    device=self.device).unsqueeze(0)
-        #         self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
-        #         # 'state', 'action', 'next_state', 'reward', 'state_index', 'next_state_index'
-        #         data = next_data
-        #         state_t = next_state_t
+        self.env.clf.init_param_musk()
 
     def OD_fit(self, Xtest=None, Ytest=None):
         self.env.clf.training_prepare(self.env.train_seqs, y=self.env.train_label)
@@ -284,16 +253,33 @@ class DQNSS():
                 self.env.clf.net.train()
         return
 
+    def warmup(self):
+        # 把3种action和他们的reward输入进memory去
+        return
+
     def SS_fit(self, epoch):
         """
         Fit the model according to the dataset and hyperparameters. The best model is obtained by using
         the best auc-pr score with the validation set.
         :param reset_nets: whether to reset the networks
         """
-        # perform warmup steps
+        # 初始化参数、关键参数
         if epoch == 0:
-            self.warmup_steps()
+            self.Init_params()
+        self.get_reward_dis()
+        self.warmup()
         self.reset_counters()
+
+        # a = 0.5
+        # reward = pd.DataFrame()
+        # reward_e = self.env.reward_dis
+        # e = np.percentile(reward_e, 90)
+        # reward_i = self.intrinsic_rewards[self.env.train_start]
+        # i = np.percentile(reward_i, 90)
+        # reward['0'] = a * (2*e - reward_e) + (1 - a) * reward_i
+        # reward['1'] = a * (2*e - reward_e) + (1 - a) * (2*i - reward_i)
+        # reward['2'] = a * reward_e + (1 - a) * i
+        # print(reward)
 
         for i_episode in range(self.num_episodes):
             # Initialize the environment and get it's state
@@ -312,7 +298,7 @@ class DQNSS():
                 next_state_t, reward, _, _ = self.env.step(action.item())
                 # states.append((self.env.x[observation,:],action.item()))
 
-                reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, a=self.a)
+                reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, e=self.env.e, i=self.i, a=self.a)
 
                 reward_history.append(reward)
                 reward = torch.tensor([reward], dtype=torch.float32, device=self.device)
@@ -336,6 +322,7 @@ class DQNSS():
                     self.target_net.load_state_dict(policy_net_state_dict)
                 if self.num_steps_done % self.theta_update == 0:
                     self.intrinsic_rewards = DQN_iforest(self.x_tensor, self.policy_net)
+                    self.i = np.percentile(self.intrinsic_rewards, self.rate)
 
             # because the theta^e update is equal to the duration of the episode we can update the theta^e here
             self.episodes_total_reward.append(sum(reward_history))
@@ -355,7 +342,7 @@ class DQNSS():
         add_seq_starts = self.env.train_start[add_index]
         add_seq_starts = np.sort(add_seq_starts)
 
-        delet_index = np.where(actions == 1)[0]
+        delet_index = np.where(actions == 2)[0]
         delet_seq_starts = self.env.train_start[delet_index]
         delet_seq_starts = np.sort(delet_seq_starts)
         self.env.train_start = np.delete(self.env.train_start, delet_seq_starts, axis=0)
@@ -363,11 +350,11 @@ class DQNSS():
         for add_seq_start in add_seq_starts:
             if add_seq_start - self.env.clf.split[0] >= 0:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start - self.env.clf.split[0])
-            if add_seq_start + self.env.clf.split[1] <= len(self.env.clf.ori_data) - self.env.clf.seq_len + 1:
+            if add_seq_start + self.env.clf.split[1] < len(self.env.x) - self.env.clf.seq_len + 1:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start + self.env.clf.split[1])
-            if add_seq_start - self.env.clf.split[1] >= 0:
+            if add_seq_start - self.env.clf.split[1] > 0:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start - self.env.clf.split[1])
-            if add_seq_start + self.env.clf.split[0] <= len(self.env.clf.ori_data) - self.env.clf.seq_len + 1:
+            if add_seq_start + self.env.clf.split[0] <= len(self.env.x) - self.env.clf.seq_len + 1:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start + self.env.clf.split[0])
 
         self.env.train_start = np.sort(self.env.train_start)

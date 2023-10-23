@@ -24,6 +24,7 @@ class ADEnv(gym.Env):
         """
         super().__init__()
         self.reward_dis = None
+        self.e = 0.5
         self.device = device
         self.seq_len = seq_len
         self.stride = stride
@@ -45,7 +46,7 @@ class ADEnv(gym.Env):
         self.state_space = spaces.Discrete(self.n_samples)  # 状态空间（全部的训练集)
 
         # action space: # 0扩展，1保持，2删除
-        self.action_space = spaces.Discrete(2)  # 0扩展，1保持，2删除.0扩展1删除
+        self.action_space = spaces.Discrete(3)  # 0扩展，1保持，2删除.0扩展1删除
 
         # initial state
         self.counts = None
@@ -96,8 +97,8 @@ class ADEnv(gym.Env):
         # 0扩展，1保持，2删除
         if action == 0:  # 扩展该数据
             loc = np.argmin(dist)  # 找最像的
-        # elif action == 1:
-        #     loc = random.randint(0, self.num_sample)
+        elif action == 1:
+            loc = random.randint(0, self.num_sample-1)
         else:  # action == 2 # 删除该数据
             loc = np.argmax(dist)  # 找最不像的
         state_t = S[loc]

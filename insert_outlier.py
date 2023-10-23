@@ -60,6 +60,12 @@ def add_outliers(data, config):
 
 
 def insert_outlier(train, num, okind, test_label=None):
+    # extreme,shift,trend,variance
+    # OUTLIER_GENERATORS = {'extreme': MultivariateExtremeOutlierGenerator,
+    #                       'shift': MultivariateShiftOutlierGenerator,
+    #                       'trend': MultivariateTrendOutlierGenerator,
+    #                       'variance': MultivariateVarianceOutlierGenerator}
+
     train = pd.DataFrame(train)
     N = len(train)
     Columns = len(train.columns)

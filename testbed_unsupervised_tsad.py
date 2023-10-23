@@ -31,7 +31,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='SMD,MSL,SMAP,SWaT_cut',
+                    default='SMD',
                     help='SMD,MSL,SMAP,SWaT_cut,ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
@@ -120,19 +120,19 @@ def main():
             # train_data, train_labels, test_data, labels = insert_pollution_new(test_data, labels, args.rate)
             # train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
             # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
-            # train_data, train_labels = insert_outlier(train_data, 10, 'variance')
+            train_data, train_labels = insert_outlier(train_data, 10, 'variance')
 
             entries = []
             t_lst = []
             for i in range(args.runs):
-                print(f'\nRunning [{i+1}/{args.runs}] of [{args.model}] on Dataset [{dataset_name}]')
+                print(f'\nRunning [{i+1}/{args.runs}] of [{args.model}] [{funcs[args.sample_selection]}] on Dataset [{dataset_name}]')
 
                 t1 = time.time()
                 clf = model_class(**model_configs, random_state=42+i)
                 clf.sample_selection = args.sample_selection
                 # clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
                 # clf.fit(train_data, train_labels, test_data, labels)
-                clf.fit(train_data, None, test_data, labels)
+                clf.fit(train_data[:1000], None, test_data, labels)
                 # clf.fit(test_data, labels)
                 # clf.fit(train_data, labels)
 
@@ -156,7 +156,7 @@ def main():
                 txt += ', '.join(['%.4f' % a for a in eval_metrics]) + \
                        ', pa, ' + \
                        ', '.join(['%.4f' % a for a in adj_eval_metrics])
-                txt += f', model, {args.model}, time, {t:.1f}, runs, {i+1}/{args.runs}'
+                txt += f', model, {args.model}, time, {t:.1f}, runs, {i+1}/{args.runs}, {funcs[args.sample_selection]}'
                 print(txt)
 
                 entries.append(adj_eval_metrics)
