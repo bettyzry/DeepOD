@@ -120,7 +120,8 @@ def main():
             # train_data, train_labels, test_data, labels = insert_pollution_new(test_data, labels, args.rate)
             # train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
             # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
-            train_data, train_labels = insert_outlier(train_data, 10, 'variance')
+            # extreme, shift, trend, variance
+            train_data, train_labels = insert_outlier(dataset, train_data, 10, 'variance')
 
             entries = []
             t_lst = []
@@ -132,7 +133,7 @@ def main():
                 clf.sample_selection = args.sample_selection
                 # clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
                 # clf.fit(train_data, train_labels, test_data, labels)
-                clf.fit(train_data[:1000], None, test_data, labels)
+                clf.fit(train_data, None, test_data, labels)
                 # clf.fit(test_data, labels)
                 # clf.fit(train_data, labels)
 

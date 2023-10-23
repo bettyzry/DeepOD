@@ -59,7 +59,7 @@ def add_outliers(data, config):
     return df
 
 
-def insert_outlier(train, num, okind, test_label=None):
+def insert_outlier(dataset, train, num, okind, test_label=None):
     # extreme,shift,trend,variance
     # OUTLIER_GENERATORS = {'extreme': MultivariateExtremeOutlierGenerator,
     #                       'shift': MultivariateShiftOutlierGenerator,
@@ -71,13 +71,21 @@ def insert_outlier(train, num, okind, test_label=None):
     Columns = len(train.columns)
     actions = {okind: []}
 
-    sum_num = 20
-    sep = int(N / sum_num)
-    factor = 4
-
+    factor = 2
     if okind == 'extreme':
         timestamp = 1
+        rate = num/100      # 污染率
+        outliernum = int(N*rate)
+        loc = pd.read_csv('loc.csv', index_col=0)
+        loc = loc[dataset].values
+        realloc = loc[:outliernum]
+        labels = np.zeros(N)
+        timestamps = [(l, ) for l in realloc]
+        for l in realloc:
+            labels[l] = 1
     else:
+        sum_num = 20
+        sep = int(N / sum_num)
         if test_label is not None:
             splits = np.where(test_label[1:] != test_label[:-1])[0] + 1
             is_anomaly = test_label[0] == 1
@@ -89,42 +97,85 @@ def insert_outlier(train, num, okind, test_label=None):
             timestamp = int(np.average(outlier_length))
         else:
             timestamp = min(1000, int(sep / 10))
-
-    lists = np.array([0, 5, 10, 15, 1, 6, 11, 16, 2, 7, 12, 17, 3, 8, 13, 18, 4, 9, 14, 19])
-    loc = np.array([i for i in range(1000, N - timestamp, sep)])
-    realloc = [i for i in loc[lists[:num]]]
-
-    timestamps = [(l, l + timestamp) for l in realloc]
+        lists = np.array([0, 5, 10, 15, 1, 6, 11, 16, 2, 7, 12, 17, 3, 8, 13, 18, 4, 9, 14, 19])
+        loc = np.array([i for i in range(1000, N - timestamp, sep)])
+        realloc = [i for i in loc[lists[:num]]]
+        labels = np.zeros(N)
+        for l in realloc:
+            labels[l:l + timestamp] = 1
+        timestamps = [(l, l + timestamp) for l in realloc]
     for n in range(Columns):
         actions[okind].append({'n': n, 'timestamps': timestamps, 'factor': factor})
     train = add_outliers(train, actions)
-    labels = np.zeros(N)
-    for l in realloc:
-        labels[l:l + timestamp] = 1
-    return train, labels
+    return train.values, labels
 
 
-def main():
-    df = pd.read_csv('/home/xuhz/dataset/5-TSdata/_processed_data/SMD/machine-1-3/machine-1-3_train.csv')[['A0', 'A1']]
-    label = pd.read_csv('/home/xuhz/dataset/5-TSdata/_processed_data/SMD/machine-1-3/machine-1-3_test.csv')
-    label = label[['label']].values
-    columns = df.columns
-    # for col in columns:
-    #     plt.plot(df[col], label=col)
-    # plt.legend()
-    # plt.show()
+from testbed.utils import import_ts_data_unsupervised
+import getpass
 
-    df, labels = insert_outlier(df, 20, 'variance')
 
-    for col in columns:
-        plt.plot(df[col], label=col)
-    plt.legend()
-    plt.show()
+def prepare():
+    dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
+    datasets = ['SMD', 'MSL', 'SMAP', 'SWaT_cut', 'ASD', 'DASADS', 'PUMP', 'UCR_natural_heart_vbeat', 'UCR_natural_heart_vbeat2']
+    df = {}
+    for dataset in datasets:
+        data_pkg = import_ts_data_unsupervised(dataset_root,
+                                    dataset, entities='FULL',
+                                    combine=1)
+        train_lst, test_lst, label_lst, name_lst = data_pkg
+        for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
+            N = len(train_data)
+            sum_sample = int(N * 0.2)
+            l = random.sample(list(np.arange(0, N)), sum_sample)
+            df[dataset] = l
+    df = pd.DataFrame.from_dict(df, orient='index').transpose()
+    df.to_csv('loc.csv')
+
+
+def test():
+    # extreme,shift,trend,variance
+    dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
+    datasets = ['SMAP']
+    for dataset in datasets:
+        data_pkg = import_ts_data_unsupervised(dataset_root,
+                                    dataset, entities='FULL',
+                                    combine=1)
+        train_lst, test_lst, label_lst, name_lst = data_pkg
+        for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
+            plt.plot(train_data[:, 0])
+            plt.show()
+            # train_data1, train_label = insert_outlier(dataset, train_data, 5, 'variance', test_label=None)
+            # plt.plot(train_data1[:, 0])
+            # plt.show()
+            # train_data2, train_label = insert_outlier(dataset, train_data, 10, 'variance', test_label=None)
+            # plt.plot(train_data2[:, 0])
+            # plt.show()
+            # train_data3, train_label = insert_outlier(dataset, train_data, 15, 'variance', test_label=None)
+            # plt.plot(train_data3[:, 0])
+            # plt.show()
+            # train_data4, train_label = insert_outlier(dataset, train_data, 20, 'variance', test_label=None)
+            # plt.plot(train_data4[:, 0])
+            # plt.show()
 
 
 if __name__ == '__main__':
-    main()
-    # df = {'extreme': [{'n': 0, 'timestamps': [(122, 10000)], 'factor': 8}],
-    #       'shift': [{'n': 0, 'timestamps': [(1000, 2000), (3000, 4000)], 'factor': -8}],
-    #       'trend': [{'n': 0, 'timestamps': [(7000, 8000)], 'factor': 0.005}],      # 1000*0.005
-    #       'variance': [{'n': 0, 'timestamps': [(13000, 14000)], 'factor': 10}]})
+    # prepare()
+    test()
+    #, 'MSL', 'SMAP', 'SWaT_cut', 'ASD', 'DASADS', 'PUMP', 'UCR_natural_heart_vbeat', 'UCR_natural_heart_vbeat2'
+    # df = {
+    #     # 'extreme': [{'n': 0, 'timestamps': [(122, 10000)], 'factor': 4}],
+    #     #   'shift': [{'n': 0, 'timestamps': [(10000, 20000), (30000, 40000)], 'factor': 4}],
+    #       # 'trend': [{'n': 0, 'timestamps': [(70000, 75000)], 'factor': 4}],      # 1000*0.005
+    #       'variance': [{'n': 0, 'timestamps': [(9500, 10000)], 'factor': 2}]
+    # }
+    # dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
+    # datasets = ['ASD']
+    # for dataset in datasets:
+    #     data_pkg = import_ts_data_unsupervised(dataset_root,
+    #                                 dataset, entities='FULL',
+    #                                 combine=1)
+    #     train_lst, test_lst, label_lst, name_lst = data_pkg
+    #     for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
+    #         train_data = add_outliers(pd.DataFrame(train_data),df)
+    #         plt.plot(train_data.values[:, 0])
+    #         plt.show()
