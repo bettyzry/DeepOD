@@ -200,14 +200,22 @@ class DQNSS():
     def get_reward_dis(self):
         self.env.clf.net.eval()
         metrics = []
+        losses = []
         for ii, batch_x in enumerate(self.env.clf.train_loader):
             # metric = self.get_importance_dL(batch_x, epoch, ii)
-            metric = self.env.clf.get_importance_ICLR21(batch_x)
+            metric, loss = self.env.clf.get_importance_ICLR21(batch_x)
             # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
             if ii == 0:
                 metrics = metric
+                losses = loss
             else:
                 metrics = np.concatenate((metrics, metric), axis=0)
+                losses = np.concatenate((losses, loss), axis=0)
+
+        _range = np.max(losses) - np.min(losses)
+        losses = (losses - np.min(losses)) / _range
+        self.losses = losses
+        self.l = np.percentile(losses, self.rate)
 
         metric_torch = torch.tensor(metrics, dtype=torch.float32, device='cpu')
         self.env.clf.iforest.fit(metric_torch)
@@ -284,34 +292,34 @@ class DQNSS():
         for i_episode in range(self.num_episodes):
             # Initialize the environment and get it's state
             reward_history = []
-            state_a, state_t = self.env.reset_state()
-            #  mantain both the obervation as the dataset index and value
-            # state为初始点的具体数值
-            data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
-
             for t in range(self.steps_per_episode):
+
+                state_a, state_t = self.env.reset_state()
+                data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(
+                    0)
                 self.num_steps_done += 1
 
                 # select_action encapsulates the epsilon-greedy policy
                 action = self.select_action(data, self.num_steps_done)
 
-                next_state_t, reward, _, _ = self.env.step(action.item())
+                next_state_a, reward = self.env.step(action.item(), state_a, state_t)
                 # states.append((self.env.x[observation,:],action.item()))
 
-                reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, e=self.env.e, i=self.i, a=self.a)
+                # reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, e=self.env.e, i=self.i, a=self.a)
+                reward = get_total_reward(action, reward, self.losses, state_t, e=self.env.e, i=self.l, a=self.a)
 
                 reward_history.append(reward)
                 reward = torch.tensor([reward], dtype=torch.float32, device=self.device)
-                next_data = torch.tensor(self.env.train_seqs[next_state_t, :], dtype=torch.float32,
+                next_data = torch.tensor(self.env.x[next_state_a: next_state_a+self.env.clf.seq_len], dtype=torch.float32,
                                            device=self.device).unsqueeze(0)
 
                 # Store the transition in memory
-                self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_t)
+                self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_a)
 
                 # Move to the next state
-                data = next_data
-                state_t = next_state_t
-                state_a = self.env.from_st2sa(state_t)
+                # data = next_data
+                # state_a = next_state_a
+                # state_t = self.env.from_sa2st(next_state_a)
 
                 # Perform one step of the optimization (on the policy network)
                 self.optimize_model()

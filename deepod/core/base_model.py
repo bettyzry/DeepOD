@@ -541,12 +541,10 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.param_musk = np.sort(importance.argsort()[::-1][:10000])     # 前10000个最重要的数据
                 # self.true_key_param = importance[self.param_musk] / len(self.train_data)
             else:
-                metric_torch = torch.tensor(metrics, dtype=torch.float32, device='cpu')
                 # self.iforest.fit(metric_torch)
                 # dis = -self.iforest.decision_function(metric_torch)
-                iforest = IsolationForest()
-                iforest.fit(metric_torch)
-                dis = -iforest.decision_function(metric_torch)
+                iforest = IsolationForest().fit(metrics)
+                dis = -iforest.decision_function(metrics)
 
                 # importance = np.sum(metrics, axis=0) / len(self.train_data)
                 # self.true_key_param = importance
@@ -607,8 +605,7 @@ class BaseDeepAD(metaclass=ABCMeta):
     def init_param_musk(self):
         importance = None
         for ii, batch_x in enumerate(self.train_loader):
-            _, losses = self.inference_forward(batch_x, self.net, self.criterion)
-            metric = self.get_importance_ICLR21(batch_x)
+            metric, _ = self.get_importance_ICLR21(batch_x)
             # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
             if ii == 0:
                 importance = np.sum(metric, axis=0)
@@ -658,7 +655,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         # metric = metric / mean      # 按列归一化
         metric = np.divide(metric, mean, out=np.zeros_like(metric, dtype=np.float64), where=mean != 0)
         metric = normalize(metric, axis=1, norm='l2')   # 对metric按行进行归一化
-        return metric
+        return metric, losses.cpu().detach().numpy()
 
     def get_importance_ICML17(self, batch_x):
         _, losses = self.inference_forward(batch_x, self.net, self.criterion)

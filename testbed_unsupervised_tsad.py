@@ -31,7 +31,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='SMD',
+                    default='PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2',
                     help='SMD,MSL,SMAP,SWaT_cut,ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
@@ -42,7 +42,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='TranAD',
+parser.add_argument("--model", type=str, default='NeuTraLTS',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, TimesNet, AnomalyTransformer"
                     )
 
@@ -121,7 +121,7 @@ def main():
             # train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
             # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
             # extreme, shift, trend, variance
-            train_data, train_labels = insert_outlier(dataset, train_data, 10, 'variance')
+            # train_data, train_labels = insert_outlier(dataset, train_data, 10, 'variance')
 
             entries = []
             t_lst = []
@@ -192,7 +192,7 @@ def main():
 
 
 if __name__ == '__main__':
-    for i in [7]:        # 0, 5, 6, 7
+    for i in [5]:        # 0, 5, 6, 7
         print(i)
         args.sample_selection = i
         args.runs = 5

@@ -25,10 +25,10 @@ def DQN_iforest(x, model):
     return norm_scores
 
 
-def get_total_reward(action, reward_e, intrinsic_rewards, state_a, e, i, write_rew=False, a=0.5):
+def get_total_reward(action, reward_e, intrinsic_rewards, state_t, e, i, write_rew=False, a=0.5):
     if torch.is_tensor(action):
         action = action.numpy()[0][0]
-    reward_i = intrinsic_rewards[state_a]
+    reward_i = intrinsic_rewards[state_t]
     if write_rew:
         write_reward('./results/rewards.csv', reward_i, reward_e)
     # 0扩展，1保持，2删除

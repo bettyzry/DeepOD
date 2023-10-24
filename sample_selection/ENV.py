@@ -49,7 +49,6 @@ class ADEnv(gym.Env):
         self.action_space = spaces.Discrete(3)  # 0扩展，1保持，2删除.0扩展1删除
 
         # initial state
-        self.counts = None
         self.state_a = None  # state in all data 当前状态在全部数据中的索引值
         self.state_t = None  # state in training data当前状态在训练集里的索引值
         self.DQN = None
@@ -72,7 +71,26 @@ class ADEnv(gym.Env):
         sa = self.train_start[st]
         return sa
 
-    def generater_r(self, *args, **kwargs):  # 从当前训练集中随机选择一个序列
+    def generater(self, action, s_a, *args, **kwargs):
+        if action == 0:    # expand
+            next_sa = []
+            if s_a - self.clf.split[0] >= 0:
+                next_sa.append(s_a - self.clf.split[0])
+            if s_a + self.clf.split[1] < len(self.x) - self.seq_len + 1:
+                next_sa.append(s_a + self.clf.split[1])
+            if s_a - self.clf.split[1] > 0:
+                next_sa.append(s_a - self.clf.split[1])
+            if s_a + self.clf.split[0] <= len(self.x) - self.seq_len + 1:
+                next_sa.append(s_a + self.clf.split[0])
+            index = np.random.choice(next_sa)
+            # index = next_sa
+        elif action == 1:   # save
+            index = np.random.choice(self.train_start)
+        else:       # delete
+            index = np.random.choice(self.train_start)
+        return index
+
+    def generater_r(self, *args, **kwargs):  # 删除
         # sampling function for D_a
         index = np.random.choice(self.train_start)
         return index
@@ -153,38 +171,33 @@ class ADEnv(gym.Env):
         #     else:
         #         return 0
 
-    def step(self, action):
+    def step(self, action, state_a, state_t):
         # 执行这个行动，并输出
         # store former state
-        state_a = self.state_a
-        state_t = self.state_t
+        # state_a = self.state_a
+        # state_t = self.state_t
         # choose generator
 
-        # 以p的概率随机在2个采样器中选择一个函数
-        g = np.random.choice([self.generater_r, self.generate_u], p=[0.5, 0.5])
-        state_a1 = g(action, state_a, state_t)  # 找到下一个要探索的点
-        state_t1 = self.from_sa2st(state_a1)
+        state_a1 = self.generater(action, state_a)
+        # g = np.random.choice([self.generater_r, self.generate_u], p=[0.5, 0.5])
+        # state_a1 = g(action, state_a, state_t)  # 找到下一个要探索的点
 
-        # change to the next state
-        self.state_t = int(state_t1)
-        self.state_a = int(state_a1)
-        self.counts += 1
+        if state_a not in self.train_start:
+            x = self.x[state_a: state_a+self.seq_len]
+            x = torch.tensor(x)
+            reward = self.clf.get_importance_ICLR21(x)
+        else:
+            # calculate the reward
+            # reward = self.reward_h(state_t, -1, 0)    # 当前的行为能获得多大的收益
+            reward = self.reward_dis[state_t]           # 当前的行为能获得多大的收益
 
-        # calculate the reward
-        # reward = self.reward_h(state_t, -1, 0)  # 当前的行为能获得多大的收益
-        reward = self.reward_dis[state_t]  # 当前的行为能获得多大的收益
+        # self.state_a = state_a1
+        # self.state_t = self.from_sa2st(state_a1)
 
-        # done: whether terminal or not
-        done = False
-
-        # info
-        info = {"State t": state_a, "Action t": action, "State t+1": state_a1}
-
-        return self.state_t, reward, done, info
+        return state_a1, reward
 
     def reset_state(self):
         # reset the status of environment
-        self.counts = 0
         # the first observation is uniformly sampled from the D_u
         self.state_a = np.random.choice(self.train_start)
         self.state_t = self.from_sa2st(self.state_a)
