@@ -31,8 +31,8 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2',
-                    help='SMD,MSL,SMAP,SWaT_cut,ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2',
+                    default='SMAP',
+                    help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     )
@@ -42,11 +42,11 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='NeuTraLTS',
-                    help="TcnED, TranAD, NCAD, NeuTraLTS, TimesNet, AnomalyTransformer"
+parser.add_argument("--model", type=str, default='LSTMED',
+                    help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer"
                     )
 
-parser.add_argument('--silent_header', type=bool, default=False)
+parser.add_argument('--silent_header', type=bool, default=True)
 parser.add_argument("--flag", type=str, default='')
 parser.add_argument("--note", type=str, default='')
 
@@ -54,7 +54,8 @@ parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
 parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
-parser.add_argument('--rate', type=float, default=0)              # 污染率
+parser.add_argument('--insert_outlier', type=float, default=1)      # 0不插入异常，1插入异常
+parser.add_argument('--rate', type=float, default=20)                # 异常数目
 args = parser.parse_args()
 
 # rate_list = [0, 0.01, 0.02, 0.1, 0.15, 0.2]
@@ -102,7 +103,7 @@ def main():
         print(f'data, adj_auroc, std, adj_ap, std, adj_f1, std, adj_p, std, adj_r, std, time, model', file=f)
         f.close()
         print('write')
-        print(args.rate, args.sample_selection)
+        print(args.insert_outlier, args.rate, args.sample_selection)
 
     dataset_name_lst = args.dataset.split(',')
 
@@ -121,12 +122,14 @@ def main():
             # train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
             # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
             # extreme, shift, trend, variance
-            # train_data, train_labels = insert_outlier(dataset, train_data, 10, 'variance')
+            if args.insert_outlier:
+                train_data, train_labels = insert_outlier(dataset, train_data, args.rate, 'variance')
 
             entries = []
             t_lst = []
             for i in range(args.runs):
                 print(f'\nRunning [{i+1}/{args.runs}] of [{args.model}] [{funcs[args.sample_selection]}] on Dataset [{dataset_name}]')
+                print(f'\ninsert outlier [{args.insert_outlier}] with pollution rate [{args.rate}]')
 
                 t1 = time.time()
                 clf = model_class(**model_configs, random_state=42+i)
@@ -182,7 +185,7 @@ def main():
                    avg_entry[0], std_entry[0], avg_entry[1], std_entry[1],
                    avg_entry[2], std_entry[2], avg_entry[3], std_entry[3],
                    avg_entry[4], std_entry[4],
-                   np.average(t_lst), args.model+'-'+funcs[args.sample_selection])
+                   np.average(t_lst), args.model+'-'+funcs[args.sample_selection]+str(args.insert_outlier*args.rate))
             print(txt)
 
             if not args.silent_header:
@@ -192,11 +195,23 @@ def main():
 
 
 if __name__ == '__main__':
-    for i in [5]:        # 0, 5, 6, 7
-        print(i)
-        args.sample_selection = i
-        args.runs = 5
-        main()
+    main()
+    # for i in [0, 5, 10, 15, 20]:        # 0, 5, 6, 7
+    #     print(i)
+    #     args.silent_header = False
+    #     args.insert_outlier = 1
+    #     args.sample_selection = 7
+    #     args.runs = 5
+    #     args.rate = i
+    #     main()
+
+    # for i in [7]:
+    #     print(i)
+    #     args.insert_outlier = 0
+    #     args.sample_selection = i
+    #     args.runs = 5
+    #     args.rate = 0
+    #     main()
 
     # for rate in [0, 0.2, 0.4, 0.6, 0.8]:
     #     print(rate)

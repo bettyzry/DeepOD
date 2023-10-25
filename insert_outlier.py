@@ -142,8 +142,8 @@ def test():
                                     combine=1)
         train_lst, test_lst, label_lst, name_lst = data_pkg
         for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
-            plt.plot(train_data[:, 0])
-            plt.show()
+            # plt.plot(train_data[:, 0])
+            # plt.show()
             # train_data1, train_label = insert_outlier(dataset, train_data, 5, 'variance', test_label=None)
             # plt.plot(train_data1[:, 0])
             # plt.show()
@@ -153,9 +153,9 @@ def test():
             # train_data3, train_label = insert_outlier(dataset, train_data, 15, 'variance', test_label=None)
             # plt.plot(train_data3[:, 0])
             # plt.show()
-            # train_data4, train_label = insert_outlier(dataset, train_data, 20, 'variance', test_label=None)
-            # plt.plot(train_data4[:, 0])
-            # plt.show()
+            train_data4, train_label = insert_outlier(dataset, train_data, 20, 'variance', test_label=None)
+            plt.plot(train_data4[:, 0])
+            plt.show()
 
 
 if __name__ == '__main__':

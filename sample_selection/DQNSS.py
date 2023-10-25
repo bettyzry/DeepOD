@@ -46,6 +46,7 @@ class DQNSS():
         :param destination_path: the path where to save the model
         :param device: the device to use for training
         """
+        self.reward = None
         self.device = device
         self.env = env
         self.rate = (1-rate)*100
@@ -275,76 +276,72 @@ class DQNSS():
         if epoch == 0:
             self.Init_params()
         self.get_reward_dis()
-        self.warmup()
         self.reset_counters()
 
-        # a = 0.5
-        # reward = pd.DataFrame()
-        # reward_e = self.env.reward_dis
-        # e = np.percentile(reward_e, 90)
-        # reward_i = self.intrinsic_rewards[self.env.train_start]
-        # i = np.percentile(reward_i, 90)
-        # reward['0'] = a * (2*e - reward_e) + (1 - a) * reward_i
-        # reward['1'] = a * (2*e - reward_e) + (1 - a) * (2*i - reward_i)
-        # reward['2'] = a * reward_e + (1 - a) * i
+        reward = pd.DataFrame()
+        reward['0'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * self.losses
+        reward['1'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * (2*self.l - self.losses)
+        reward['2'] = self.a * self.env.reward_dis + (1 - self.a) * self.l
+        self.reward = reward.values
         # print(reward)
 
-        for i_episode in range(self.num_episodes):
-            # Initialize the environment and get it's state
-            reward_history = []
-            for t in range(self.steps_per_episode):
-
-                state_a, state_t = self.env.reset_state()
-                data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(
-                    0)
-                self.num_steps_done += 1
-
-                # select_action encapsulates the epsilon-greedy policy
-                action = self.select_action(data, self.num_steps_done)
-
-                next_state_a, reward = self.env.step(action.item(), state_a, state_t)
-                # states.append((self.env.x[observation,:],action.item()))
-
-                # reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, e=self.env.e, i=self.i, a=self.a)
-                reward = get_total_reward(action, reward, self.losses, state_t, e=self.env.e, i=self.l, a=self.a)
-
-                reward_history.append(reward)
-                reward = torch.tensor([reward], dtype=torch.float32, device=self.device)
-                next_data = torch.tensor(self.env.x[next_state_a: next_state_a+self.env.clf.seq_len], dtype=torch.float32,
-                                           device=self.device).unsqueeze(0)
-
-                # Store the transition in memory
-                self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_a)
-
-                # Move to the next state
-                # data = next_data
-                # state_a = next_state_a
-                # state_t = self.env.from_sa2st(next_state_a)
-
-                # Perform one step of the optimization (on the policy network)
-                self.optimize_model()
-
-                    # update the target network
-                if self.num_steps_done % self.target_update == 0:
-                    policy_net_state_dict = self.policy_net.state_dict()
-                    self.target_net.load_state_dict(policy_net_state_dict)
-                if self.num_steps_done % self.theta_update == 0:
-                    self.intrinsic_rewards = DQN_iforest(self.x_tensor, self.policy_net)
-                    self.i = np.percentile(self.intrinsic_rewards, self.rate)
-
-            # because the theta^e update is equal to the duration of the episode we can update the theta^e here
-            self.episodes_total_reward.append(sum(reward_history))
-            # print the results at the end of the episode
-            avg_reward = np.average(reward_history)
-            print('Episode: {} \t Steps: {} \t Average episode Reward: {}'.format(i_episode, t + 1, avg_reward))
-        print('Complete')
+        # for i_episode in range(self.num_episodes):
+        #     # Initialize the environment and get it's state
+        #     reward_history = []
+        #     for t in range(self.steps_per_episode):
+        #
+        #         state_a, state_t = self.env.reset_state()
+        #         data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(
+        #             0)
+        #         self.num_steps_done += 1
+        #
+        #         # select_action encapsulates the epsilon-greedy policy
+        #         action = self.select_action(data, self.num_steps_done)
+        #
+        #         next_state_a, reward = self.env.step(action.item(), state_a, state_t)
+        #         # states.append((self.env.x[observation,:],action.item()))
+        #
+        #         # reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, e=self.env.e, i=self.i, a=self.a)
+        #         reward = get_total_reward(action, reward, self.losses, state_t, e=self.env.e, i=self.l, a=self.a)
+        #
+        #         reward_history.append(reward)
+        #         reward = torch.tensor([reward], dtype=torch.float32, device=self.device)
+        #         next_data = torch.tensor(self.env.x[next_state_a: next_state_a+self.env.clf.seq_len], dtype=torch.float32,
+        #                                    device=self.device).unsqueeze(0)
+        #
+        #         # Store the transition in memory
+        #         self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_a)
+        #
+        #         # Move to the next state
+        #         # data = next_data
+        #         # state_a = next_state_a
+        #         # state_t = self.env.from_sa2st(next_state_a)
+        #
+        #         # Perform one step of the optimization (on the policy network)
+        #         self.optimize_model()
+        #
+        #             # update the target network
+        #         if self.num_steps_done % self.target_update == 0:
+        #             policy_net_state_dict = self.policy_net.state_dict()
+        #             self.target_net.load_state_dict(policy_net_state_dict)
+        #         if self.num_steps_done % self.theta_update == 0:
+        #             self.intrinsic_rewards = DQN_iforest(self.x_tensor, self.policy_net)
+        #             self.i = np.percentile(self.intrinsic_rewards, self.rate)
+        #
+        #     # because the theta^e update is equal to the duration of the episode we can update the theta^e here
+        #     self.episodes_total_reward.append(sum(reward_history))
+        #     # print the results at the end of the episode
+        #     avg_reward = np.average(reward_history)
+        #     print('Episode: {} \t Steps: {} \t Average episode Reward: {}'.format(i_episode, t + 1, avg_reward))
+        # print('Complete')
 
     def sample_selection(self, epoch):
-        self.policy_net.eval()
-        train_seqs = torch.tensor(self.env.train_seqs, dtype=torch.float32, device=self.device)
-        dis = self.policy_net(train_seqs).detach().cpu().numpy()
-        actions = np.argmax(dis, axis=1)        # 有问题
-        self.policy_net.train()
+        # self.policy_net.eval()
+        # train_seqs = torch.tensor(self.env.train_seqs, dtype=torch.float32, device=self.device)
+        # dis = self.policy_net(train_seqs).detach().cpu().numpy()
+        # actions = np.argmax(dis, axis=1)        # 有问题
+        # self.policy_net.train()
+        actions = np.argmax(self.reward, axis=1)
 
         add_index = np.where(actions == 0)[0]
         add_seq_starts = self.env.train_start[add_index]

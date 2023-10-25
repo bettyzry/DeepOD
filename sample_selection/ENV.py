@@ -85,9 +85,12 @@ class ADEnv(gym.Env):
             index = np.random.choice(next_sa)
             # index = next_sa
         elif action == 1:   # save
-            index = np.random.choice(self.train_start)
+            # index = np.random.choice(self.train_start)
+            index = s_a
+            # index = s_a
         else:       # delete
-            index = np.random.choice(self.train_start)
+            # index = np.random.choice(self.train_start)
+            index = s_a
         return index
 
     def generater_r(self, *args, **kwargs):  # 删除
@@ -182,14 +185,14 @@ class ADEnv(gym.Env):
         # g = np.random.choice([self.generater_r, self.generate_u], p=[0.5, 0.5])
         # state_a1 = g(action, state_a, state_t)  # 找到下一个要探索的点
 
-        if state_a not in self.train_start:
-            x = self.x[state_a: state_a+self.seq_len]
-            x = torch.tensor(x)
-            reward = self.clf.get_importance_ICLR21(x)
-        else:
+        # if state_a not in self.train_start:
+        #     x = self.x[state_a: state_a+self.seq_len]
+        #     x = torch.tensor(x)
+        #     reward = self.clf.get_importance_ICLR21(x)
+        # else:
             # calculate the reward
             # reward = self.reward_h(state_t, -1, 0)    # 当前的行为能获得多大的收益
-            reward = self.reward_dis[state_t]           # 当前的行为能获得多大的收益
+        reward = self.reward_dis[state_t]           # 当前的行为能获得多大的收益
 
         # self.state_a = state_a1
         # self.state_t = self.from_sa2st(state_a1)

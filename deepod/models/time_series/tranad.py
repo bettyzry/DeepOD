@@ -87,6 +87,7 @@ class TranAD(BaseDeepAD):
 
         self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=self.lr, weight_decay=1e-5)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
+        self.criterion = nn.MSELoss(reduction='none')
 
     def decision_function(self, X, return_rep=False):
         seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=1)
@@ -104,8 +105,6 @@ class TranAD(BaseDeepAD):
         return loss_final_pad
 
     def training(self, epoch):
-        criterion = nn.MSELoss(reduction='none')
-
         n = epoch + 1
         l1s, l2s = [], []
 
@@ -119,7 +118,7 @@ class TranAD(BaseDeepAD):
             elem = elem.float().to(self.device)
 
             z = self.net(window, elem)
-            l1 = (1/n) * criterion(z[0], elem) + (1-1/n) * criterion(z[1], elem)  #(1, 128, 19)
+            l1 = (1/n) * self.criterion(z[0], elem) + (1-1/n) * self.criterion(z[1], elem)  #(1, 128, 19)
 
             l1s.append(torch.mean(l1).item())
             loss = torch.mean(l1)
@@ -162,8 +161,6 @@ class TranAD(BaseDeepAD):
         return np.mean(l1s)
 
     def inference(self, dataloader):
-        criterion = nn.MSELoss(reduction='none')
-
         l1s = []
         preds = []
         for d in dataloader:
@@ -175,7 +172,7 @@ class TranAD(BaseDeepAD):
             z = self.net(window, elem)
             if isinstance(z, tuple):
                 z = z[1]
-            l1 = criterion(z, elem)[0]
+            l1 = self.criterion(z, elem)[0]
             l1 = l1.data.cpu()
             l1s.append(l1)
 
@@ -188,7 +185,6 @@ class TranAD(BaseDeepAD):
         return
 
     def inference_forward(self, batch_x, net, criterion):
-        criterion = nn.MSELoss(reduction='none')
         local_bs = batch_x.shape[0]
         window = batch_x.permute(1, 0, 2)
         elem = window[-1, :, :].view(1, local_bs, self.n_features)
@@ -197,7 +193,7 @@ class TranAD(BaseDeepAD):
         z = self.net(window, elem)
         if isinstance(z, tuple):
             z = z[1]
-        l1 = criterion(z, elem)[0]
+        l1 = self.criterion(z, elem)[0]
         l1 = l1.mean(axis=1)
         return z, l1
 
@@ -218,11 +214,11 @@ class TranADNet(nn.Module):
         self.n_window = n_window
         self.n = self.n_feats * self.n_window
         self.pos_encoder = PositionalEncoding(2 * feats, 0.1, self.n_window)
-        encoder_layers = TransformerEncoderLayer(d_model=2 * feats, nhead=feats, dim_feedforward=16, dropout=0.1)
+        encoder_layers = TransformerEncoderLayer(d_model=2 * feats, nhead=feats, dim_feedforward=16, dropout=0.4)
         self.transformer_encoder = TransformerEncoder(encoder_layers, 1)
-        decoder_layers1 = TransformerDecoderLayer(d_model=2 * feats, nhead=feats, dim_feedforward=16, dropout=0.1)
+        decoder_layers1 = TransformerDecoderLayer(d_model=2 * feats, nhead=feats, dim_feedforward=16, dropout=0.4)
         self.transformer_decoder1 = TransformerDecoder(decoder_layers1, 1)
-        decoder_layers2 = TransformerDecoderLayer(d_model=2 * feats, nhead=feats, dim_feedforward=16, dropout=0.1)
+        decoder_layers2 = TransformerDecoderLayer(d_model=2 * feats, nhead=feats, dim_feedforward=16, dropout=0.4)
         self.transformer_decoder2 = TransformerDecoder(decoder_layers2, 1)
         self.fcn = nn.Sequential(nn.Linear(2 * feats, feats), nn.Sigmoid())
 
