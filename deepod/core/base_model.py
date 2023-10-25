@@ -106,7 +106,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                  n_ensemble=1, seq_len=100, stride=1,
                  epoch_steps=-1, prt_steps=10,
                  device='cuda', contamination=0.1,
-                 verbose=1, random_state=42, sample_selection=0):
+                 verbose=1, random_state=42, sample_selection=0, a=0.8):
         self.model_name = model_name
 
         self.data_type = data_type
@@ -174,7 +174,9 @@ class BaseDeepAD(metaclass=ABCMeta):
 
         self.dqnss = None
         self.iforest = IsolationForest()
-
+        self.a = a
+        self.rate = (1-0.1) * 100
+        self.optimizer = None
         return
 
     def fit(self, X, y=None):
@@ -512,11 +514,12 @@ class BaseDeepAD(metaclass=ABCMeta):
             dis = np.zeros(len(self.train_data))
             importance = None
             metrics = np.array([])
+            losses = np.array([])
             self.net.eval()
             self.init_param()
             for ii, batch_x in enumerate(self.train_loader):
                 # metric = self.get_importance_dL(batch_x)
-                metric = self.get_importance_ICLR21(batch_x)
+                metric, loss = self.get_importance_ICLR21(batch_x)
                 # metric = self.get_importance_ICML17(batch_x)       # 巨慢
 
                 if epoch == 0:
@@ -527,8 +530,10 @@ class BaseDeepAD(metaclass=ABCMeta):
                 else:
                     if ii == 0:
                         metrics = metric
+                        losses = loss
                     else:
                         metrics = np.concatenate((metrics, metric), axis=0)
+                        losses = np.concatenate((losses, loss), axis=0)
 
                 #
                 # if epoch == 0:      # 只累计importance
@@ -538,13 +543,18 @@ class BaseDeepAD(metaclass=ABCMeta):
             self.net.train()
 
             if epoch == 0:
-                self.param_musk = np.sort(importance.argsort()[::-1][:10000])     # 前10000个最重要的数据
+                self.param_musk = np.sort(importance.argsort()[::-1][:1000])     # 前10000个最重要的数据
                 # self.true_key_param = importance[self.param_musk] / len(self.train_data)
             else:
                 # self.iforest.fit(metric_torch)
                 # dis = -self.iforest.decision_function(metric_torch)
                 iforest = IsolationForest().fit(metrics)
                 dis = -iforest.decision_function(metrics)
+                _range = np.max(dis) - np.min(dis)
+                dis = (dis - np.min(dis)) / _range
+
+                _range = np.max(losses) - np.min(losses)
+                losses = (losses - np.min(losses)) / _range
 
                 # importance = np.sum(metrics, axis=0) / len(self.train_data)
                 # self.true_key_param = importance
@@ -553,16 +563,34 @@ class BaseDeepAD(metaclass=ABCMeta):
                 # metrics = np.insert(metrics, 0, self.train_label, axis=1)
                 # df = pd.DataFrame(metrics)
                 # df.to_csv('@g_detail/TcnED-DASADS-ICLR21-ori/%s.csv' % str(epoch))
+                reward = pd.DataFrame()
+                d = np.percentile(dis, self.rate)
+                l = np.percentile(losses, self.rate)
+                reward['0'] = self.a * (2 * d - dis) + (1 - self.a) * losses
+                reward['1'] = self.a * (2 * d - dis) + (1 - self.a) * (
+                            2 * l - losses)
+                reward['2'] = self.a * dis + (1 - self.a) * l
 
-                add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.4))  # 每次添加的数据量
-                index = dis.argsort()[:add_num]  # 扩展距离最小的40%
-                index = np.sort(index)
-                add_seq_starts = self.seq_starts[index]
+                actions = np.argmax(reward.values, axis=1)
 
-                delet_num = min(int(self.del_rate * len(self.train_data)), int(self.n_samples * 0.2))  # 每次添加的数据量
-                index = dis.argsort()[::-1][:delet_num]  # 删除距离最大的20%
-                index = np.sort(index)
-                self.seq_starts = np.delete(self.seq_starts, index, axis=0)
+                add_index = np.where(actions == 0)[0]
+                add_seq_starts = self.seq_starts[add_index]
+                add_seq_starts = np.sort(add_seq_starts)
+
+                delet_index = np.where(actions == 2)[0]
+                # delet_seq_starts = self.seq_starts[delet_index]
+                # delet_seq_starts = np.sort(delet_seq_starts)
+                self.seq_starts = np.delete(self.seq_starts, delet_index, axis=0)
+                #
+                # add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.4))  # 每次添加的数据量
+                # index = dis.argsort()[:add_num]  # 扩展距离最小的40%
+                # index = np.sort(index)
+                # add_seq_starts = self.seq_starts[index]
+                #
+                # delet_num = min(int(self.del_rate * len(self.train_data)), int(self.n_samples * 0.2))  # 每次添加的数据量
+                # index = dis.argsort()[::-1][:delet_num]  # 删除距离最大的20%
+                # index = np.sort(index)
+                # self.seq_starts = np.delete(self.seq_starts, index, axis=0)
 
                 for add_seq_start in add_seq_starts:
                     if add_seq_start - self.split[0] >= 0:

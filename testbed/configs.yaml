@@ -15,9 +15,9 @@ DeepSVDDTS:
   epoch_steps: -1
 
 TranAD:
-  lr: 0.0001
+  lr: 0.000001
   epochs: 50
-  batch_size: 128
+  batch_size: 256
   epoch_steps: -1
 
 USAD:
@@ -82,4 +82,10 @@ NCAD:
 NeuTraLTS:
   epochs: 50
   batch_size: 64
-  lr: 0.0001
+  lr: 0.000001
+
+
+LSTMED:
+  epochs: 50
+  batch_size: 64
+  lr: 0.00001

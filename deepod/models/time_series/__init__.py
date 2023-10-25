@@ -14,7 +14,8 @@ from .devnet import DevNetTS
 from .prenet import PReNetTS
 from .ncad import NCAD
 from .neutralTS import NeuTraLTS
+from .lstmed import LSTMED
 
 
 __all__ = ['DeepIsolationForestTS', 'DeepSVDDTS', 'TranAD', 'USAD', 'COUTA', 'TcnED',
-           'DeepSADTS', 'DevNetTS', 'PReNetTS', 'AnomalyTransformer', 'TimesNet', 'NCAD', 'NeuTraLTS']
+           'DeepSADTS', 'DevNetTS', 'PReNetTS', 'AnomalyTransformer', 'TimesNet', 'NCAD', 'NeuTraLTS', 'LSTMED']
