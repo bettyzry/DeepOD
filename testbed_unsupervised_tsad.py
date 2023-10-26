@@ -31,7 +31,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='SMAP',
+                    default='DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
@@ -42,19 +42,20 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='LSTMED',
-                    help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer"
+parser.add_argument("--model", type=str, default='FGANomaly',
+                    help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 
-parser.add_argument('--silent_header', type=bool, default=True)
+parser.add_argument('--silent_header', type=bool, default=False)
 parser.add_argument("--flag", type=str, default='')
 parser.add_argument("--note", type=str, default='')
 
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
+# parser.add_argument('--lr', type=float, default=0.0001)
 
-parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
-parser.add_argument('--insert_outlier', type=float, default=1)      # 0不插入异常，1插入异常
+parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
+parser.add_argument('--insert_outlier', type=float, default=0)      # 0不插入异常，1插入异常
 parser.add_argument('--rate', type=float, default=20)                # 异常数目
 args = parser.parse_args()
 

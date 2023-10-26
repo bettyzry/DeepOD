@@ -106,7 +106,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                  n_ensemble=1, seq_len=100, stride=1,
                  epoch_steps=-1, prt_steps=10,
                  device='cuda', contamination=0.1,
-                 verbose=1, random_state=42, sample_selection=0, a=0.8):
+                 verbose=1, random_state=42, sample_selection=0, a=0.2, rate=0.1):
         self.model_name = model_name
 
         self.data_type = data_type
@@ -175,7 +175,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.dqnss = None
         self.iforest = IsolationForest()
         self.a = a
-        self.rate = (1-0.1) * 100
+        self.rate = (1-rate) * 100
         self.optimizer = None
         return
 
@@ -548,17 +548,18 @@ class BaseDeepAD(metaclass=ABCMeta):
             else:
                 # self.iforest.fit(metric_torch)
                 # dis = -self.iforest.decision_function(metric_torch)
-                iforest = IsolationForest().fit(metrics)
-                dis = -iforest.decision_function(metrics)
-                _range = np.max(dis) - np.min(dis)
-                dis = (dis - np.min(dis)) / _range
+
+                # iforest = IsolationForest().fit(metrics)
+                # dis = -iforest.decision_function(metrics)
+                # _range = np.max(dis) - np.min(dis)
+                # dis = (dis - np.min(dis)) / _range
+
+                importance = np.sum(metrics, axis=0) / len(self.train_data)
+                self.true_key_param = importance
+                dis = np.linalg.norm(importance - metrics, axis=1, ord=np.Inf)
 
                 _range = np.max(losses) - np.min(losses)
                 losses = (losses - np.min(losses)) / _range
-
-                # importance = np.sum(metrics, axis=0) / len(self.train_data)
-                # self.true_key_param = importance
-                # dis = np.linalg.norm(importance - metrics, axis=1, ord=np.Inf)
 
                 # metrics = np.insert(metrics, 0, self.train_label, axis=1)
                 # df = pd.DataFrame(metrics)
@@ -573,13 +574,14 @@ class BaseDeepAD(metaclass=ABCMeta):
 
                 actions = np.argmax(reward.values, axis=1)
 
+                # delet_seq_starts = self.seq_starts[delet_index]
+                # delet_seq_starts = np.sort(delet_seq_starts)
+
                 add_index = np.where(actions == 0)[0]
                 add_seq_starts = self.seq_starts[add_index]
                 add_seq_starts = np.sort(add_seq_starts)
 
                 delet_index = np.where(actions == 2)[0]
-                # delet_seq_starts = self.seq_starts[delet_index]
-                # delet_seq_starts = np.sort(delet_seq_starts)
                 self.seq_starts = np.delete(self.seq_starts, delet_index, axis=0)
                 #
                 # add_num = min(int(self.add_rate * len(self.train_data)), int(self.n_samples * 0.4))  # 每次添加的数据量

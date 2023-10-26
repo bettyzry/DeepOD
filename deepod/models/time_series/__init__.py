@@ -15,7 +15,9 @@ from .prenet import PReNetTS
 from .ncad import NCAD
 from .neutralTS import NeuTraLTS
 from .lstmed import LSTMED
+from .dcdetector import DCdetector
+from .fganomaly import FGANomaly
 
 
-__all__ = ['DeepIsolationForestTS', 'DeepSVDDTS', 'TranAD', 'USAD', 'COUTA', 'TcnED',
+__all__ = ['DeepIsolationForestTS', 'DeepSVDDTS', 'TranAD', 'USAD', 'COUTA', 'TcnED', 'DCdetector', 'FGANomaly',
            'DeepSADTS', 'DevNetTS', 'PReNetTS', 'AnomalyTransformer', 'TimesNet', 'NCAD', 'NeuTraLTS', 'LSTMED']
