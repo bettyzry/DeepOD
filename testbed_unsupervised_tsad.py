@@ -56,7 +56,7 @@ parser.add_argument('--stride', type=int, default=1)
 
 parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
 parser.add_argument('--insert_outlier', type=float, default=0)      # 0不插入异常，1插入异常
-parser.add_argument('--rate', type=float, default=20)                # 异常数目
+parser.add_argument('--rate', type=int, default=20)                # 异常数目
 args = parser.parse_args()
 
 # rate_list = [0, 0.01, 0.02, 0.1, 0.15, 0.2]

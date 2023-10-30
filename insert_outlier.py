@@ -60,6 +60,7 @@ def add_outliers(data, config):
 
 
 def insert_outlier(dataset, train, num, okind, test_label=None):
+    num = int(num)
     # extreme,shift,trend,variance
     # OUTLIER_GENERATORS = {'extreme': MultivariateExtremeOutlierGenerator,
     #                       'shift': MultivariateShiftOutlierGenerator,
@@ -73,7 +74,6 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
 
     factor = 2
     if okind == 'extreme':
-        timestamp = 1
         rate = num/100      # 污染率
         outliernum = int(N*rate)
         loc = pd.read_csv('loc.csv', index_col=0)
@@ -104,6 +104,7 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
         for l in realloc:
             labels[l:l + timestamp] = 1
         timestamps = [(l, l + timestamp) for l in realloc]
+
     for n in range(Columns):
         actions[okind].append({'n': n, 'timestamps': timestamps, 'factor': factor})
     train = add_outliers(train, actions)
