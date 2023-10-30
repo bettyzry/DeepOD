@@ -18,6 +18,7 @@ from sample_selection.DQN import DQN
 from sample_selection.RelayMemory import ReplayMemory
 from deepod.metrics import ts_metrics, point_adjustment
 import time
+from torch.utils.data import DataLoader, TensorDataset
 
 torch.manual_seed(42)
 random.seed(42)
@@ -34,10 +35,10 @@ class DQNSS():
     """
 
     def __init__(self, env, rate=0.1, device='cpu',
-                 n_episodes=6, steps_per_episode=200, max_memory=10000, eps_max=1, eps_min=0.1,
-                 eps_decay=500, hidden_size=10, learning_rate=0.25e-4, momentum=0.95,
-                 min_squared_gradient=0.1, warmup_steps=1, gamma=0.99, batch_size=64,
-                 target_update=200, theta_update=100, weight_decay=1e-3, a=0.8):
+                 n_episodes=6, steps_per_episode=2000, max_memory=10000, eps_max=1, eps_min=0.1,
+                 eps_decay=5000, hidden_size=10, learning_rate=0.25e-4, momentum=0.95,
+                 min_squared_gradient=0.1, warmup_steps=1, gamma=0.1, batch_size=64,
+                 target_update=2000, theta_update=100, weight_decay=1e-3, a=0.2):
         """
         Initialize the DPLAN agent
         :param env: the environment
@@ -74,7 +75,7 @@ class DQNSS():
         self.n_feature = None
 
         # tensor rapresentation of the dataset used in the intrinsic reward
-        self.x_tensor = torch.tensor(self.env.x, dtype=torch.float32, device=self.device)
+        self.x_tensor = torch.tensor(self.env.train_seqs, dtype=torch.float32, device=self.device)
         #  n actions and n observations
         self.n_actions = self.env.action_space.n  # 可以执行的行动的数量
         self.n_feature = self.env.n_feature  # 有错？？
@@ -110,8 +111,8 @@ class DQNSS():
         # setting up the environment's DQN
         self.env.DQN = self.policy_net
         # setting up the environment's intrinsic reward as function of netwo rk's theta_e (i.e. the hidden layer)
-        self.intrinsic_rewards = DQN_iforest(self.x_tensor, self.policy_net)            # 计算不同x的异常分数，即他们的孤立性
-        self.i = np.percentile(self.intrinsic_rewards, self.rate)
+        # self.intrinsic_rewards = DQN_iforest(self.x_tensor, self.policy_net)            # 计算不同x的异常分数，即他们的孤立性
+        # self.i = np.percentile(self.intrinsic_rewards, self.rate)
 
         # setting the rmsprop optimizer
         self.optimizer = optim.RMSprop(                                      # 优化器
@@ -143,6 +144,30 @@ class DQNSS():
                 return self.policy_net(data).max(1)[1].view(1, 1)
         else:
             return torch.tensor([[self.env.action_space.sample()]], device=self.device, dtype=torch.long)
+
+    def init_model(self):
+        batch_size = 16
+        train_dataset = TensorDataset(torch.Tensor(self.env.train_seqs), torch.Tensor(self.reward))
+
+        train_loader = DataLoader(train_dataset, batch_size=batch_size,
+                                  shuffle=True, pin_memory=True)
+        optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=0.001, weight_decay=1e-5)
+        for e in range(20):
+            losslist = []
+            for state_batch, y_batch in train_loader:
+                state_action_values = self.policy_net(state_batch)
+                # loss = nn.CosineEmbeddingLoss(reduction='mean')(state_action_values, y_batch, torch.ones([len(state_batch)]))
+                # loss = nn.MSELoss(reduction='mean')(state_action_values, y_batch)
+                loss = nn.SmoothL1Loss(reduction='mean')(state_action_values, y_batch)
+                optimizer.zero_grad()
+                loss.backward()
+                # In-place gradient clipping
+                # torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+                self.optimizer.step()
+                losslist.append(loss.cpu().detach().numpy())
+            print(e+1, np.mean(losslist))
+        policy_net_state_dict = self.policy_net.state_dict()
+        self.target_net.load_state_dict(policy_net_state_dict)
 
     def optimize_model(self):
         """
@@ -278,21 +303,27 @@ class DQNSS():
         self.get_reward_dis()
         self.reset_counters()
 
-        # reward = pd.DataFrame()
-        # reward['0'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * self.losses
-        # reward['1'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * (2*self.l - self.losses)
-        # reward['2'] = self.a * self.env.reward_dis + (1 - self.a) * self.l
-        # self.reward = reward.values
-        # print(reward)
+        reward = pd.DataFrame()
+        reward['0'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * self.losses
+        reward['1'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * (2*self.l - self.losses)
+        reward['2'] = self.a * self.env.reward_dis + (1 - self.a) * self.l
+        self.reward = reward.values
+        index = np.argmax(self.reward, axis=1)
+        self.init_model()
 
         for i_episode in range(self.num_episodes):
+            self.policy_net.eval()
+            train_seqs = torch.tensor(self.env.train_seqs, dtype=torch.float32, device=self.device)
+            dis = self.policy_net(train_seqs).detach().cpu().numpy()
+            actions = np.argmax(dis, axis=1)  # 有问题
+            self.policy_net.train()
             # Initialize the environment and get it's state
             reward_history = []
-            for t in range(self.steps_per_episode):
 
-                state_a, state_t = self.env.reset_state()
-                data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(
+            state_a, state_t = self.env.reset_state()
+            data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(
                     0)
+            for t in range(self.steps_per_episode):
                 self.num_steps_done += 1
 
                 # select_action encapsulates the epsilon-greedy policy
@@ -313,9 +344,9 @@ class DQNSS():
                 self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_a)
 
                 # Move to the next state
-                # data = next_data
-                # state_a = next_state_a
-                # state_t = self.env.from_sa2st(next_state_a)
+                data = next_data
+                state_a = next_state_a
+                state_t = self.env.from_sa2st(next_state_a)
 
                 # Perform one step of the optimization (on the policy network)
                 self.optimize_model()
@@ -324,9 +355,9 @@ class DQNSS():
                 if self.num_steps_done % self.target_update == 0:
                     policy_net_state_dict = self.policy_net.state_dict()
                     self.target_net.load_state_dict(policy_net_state_dict)
-                if self.num_steps_done % self.theta_update == 0:
-                    self.intrinsic_rewards = DQN_iforest(self.x_tensor, self.policy_net)
-                    self.i = np.percentile(self.intrinsic_rewards, self.rate)
+                # if self.num_steps_done % self.theta_update == 0:
+                #     self.intrinsic_rewards = DQN_iforest(self.x_tensor, self.policy_net)
+                #     self.i = np.percentile(self.intrinsic_rewards, self.rate)
 
             # because the theta^e update is equal to the duration of the episode we can update the theta^e here
             self.episodes_total_reward.append(sum(reward_history))
@@ -336,12 +367,12 @@ class DQNSS():
         print('Complete')
 
     def sample_selection(self, epoch):
-        # self.policy_net.eval()
-        # train_seqs = torch.tensor(self.env.train_seqs, dtype=torch.float32, device=self.device)
-        # dis = self.policy_net(train_seqs).detach().cpu().numpy()
-        # actions = np.argmax(dis, axis=1)        # 有问题
-        # self.policy_net.train()
-        actions = np.argmax(self.reward, axis=1)
+        self.policy_net.eval()
+        train_seqs = torch.tensor(self.env.train_seqs, dtype=torch.float32, device=self.device)
+        dis = self.policy_net(train_seqs).detach().cpu().numpy()
+        actions = np.argmax(dis, axis=1)        # 有问题
+        self.policy_net.train()
+        # actions = np.argmax(self.reward, axis=1)
 
         add_index = np.where(actions == 0)[0]
         add_seq_starts = self.env.train_start[add_index]

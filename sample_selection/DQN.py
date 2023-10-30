@@ -24,23 +24,16 @@ class DQN(nn.Module):
         self.latent = nn.Sequential(
             nn.Linear(n_feature, hidden_size),
         )
-        self.layer1 = nn.Linear(seq_len, 1)
-        self.layer2 = nn.Linear(hidden_size, n_actions)
-        self.output_layer = nn.Linear(self.seq_len*self.hidden_size, n_actions)
-        # self.output_layer = nn.Linear(hidden_size, n_actions)
+        # self.output_layer = nn.Linear(self.seq_len*self.hidden_size, n_actions)
+        self.output_layer = nn.Linear(hidden_size, n_actions)
 
     def forward(self, x):
         if not isinstance(x, torch.Tensor):
             x = torch.as_tensor(x, dtype=torch.float32, device=self.device)
         x = F.relu(self.latent(x))
-        # x = x.permute(0, 2, 1)
-        # x = self.layer1(x)
-        # x = F.relu(x)
-        # x = x.permute(0, 2, 1)
-        # x = self.layer2(x)
-        # return x
-        x = x.view(-1, self.seq_len*self.hidden_size)
-        return self.output_layer(x)
+        x = self.output_layer(x)
+        x = torch.sum(x, dim=1)
+        return x
 
     def get_latent(self, x):
         """

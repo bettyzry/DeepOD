@@ -98,7 +98,7 @@ class ADEnv(gym.Env):
         index = np.random.choice(self.train_start)
         return index
 
-    def generate_u(self, action, s_a, s_t):
+    def generate_h(self, action, s_a):
         # 对状态s_t要执行action操作
         # sampling function for D_u
         # 在所有的训练集中随机采num_S个，S为采样数据in all data的索引号               # 为了效率
@@ -117,11 +117,39 @@ class ADEnv(gym.Env):
 
         # 0扩展，1保持，2删除
         if action == 0:  # 扩展该数据
-            loc = np.argmin(dist)  # 找最像的
+            loc = random.randint(0, self.num_sample-1)
+        elif action == 1:
+            loc = np.argmin(dist)  # 提高难例的探索几率
+        else:  # action == 2 # 删除该数据
+            loc = random.randint(0, self.num_sample-1)
+        state_t = S[loc]
+        state_a = self.from_st2sa(state_t)
+        return state_a       # 返回state_a
+
+    def generate_o(self, action, s_a):
+        # 对状态s_t要执行action操作
+        # sampling function for D_u
+        # 在所有的训练集中随机采num_S个，S为采样数据in all data的索引号               # 为了效率
+        S = np.random.choice(range(len(self.train_seqs)), self.num_sample)
+        # calculate distance in the space of last hidden layer of DQN
+        # all_x = self.train_seqs[S].append(self.x[s_a: s_a + self.seq_len])  # 提取全部采样点+当前位置，对应的数据的值
+        all_x = np.concatenate((self.train_seqs[S], [self.x[s_a: s_a + self.seq_len]]), axis=0)
+
+        all_dqn_s = self.DQN.get_latent(all_x)  # 提取数据的表征
+        all_dqn_s = all_dqn_s.cpu().detach().numpy()
+        dqn_s = all_dqn_s[:-1]
+        dqn_st = all_dqn_s[-1]
+
+        dist = np.linalg.norm(dqn_s - dqn_st, axis=1)  # 采样数据点与当前状态st的距离
+        dist = np.average(dist, axis=1)
+
+        # 0扩展，1保持，2删除
+        if action == 0:  # 扩展该数据
+            loc = np.argmax(dist)  # 找最不像的
         elif action == 1:
             loc = random.randint(0, self.num_sample-1)
         else:  # action == 2 # 删除该数据
-            loc = np.argmax(dist)  # 找最不像的
+            loc = np.argmin(dist)  # 找最像的
         state_t = S[loc]
         state_a = self.from_st2sa(state_t)
         return state_a       # 返回state_a
@@ -181,9 +209,11 @@ class ADEnv(gym.Env):
         # state_t = self.state_t
         # choose generator
 
-        state_a1 = self.generater(action, state_a)
-        # g = np.random.choice([self.generater_r, self.generate_u], p=[0.5, 0.5])
-        # state_a1 = g(action, state_a, state_t)  # 找到下一个要探索的点
+        # state_a1 = self.generater(action, state_a)
+        # g = np.random.choice([self.generater_r, self.generate_o], p=[0.5, 0.5])
+        # g = np.random.choice([self.generater_r, self.generate_o, self.generate_h], p=[0.4, 0.3, 0.3])
+        g = np.random.choice([self.generater_r, self.generate_o, self.generate_h], p=[0.4, 0.3, 0.3])
+        state_a1 = g(action, state_a)  # 找到下一个要探索的点
 
         # if state_a not in self.train_start:
         #     x = self.x[state_a: state_a+self.seq_len]

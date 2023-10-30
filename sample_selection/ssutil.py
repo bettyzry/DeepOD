@@ -15,7 +15,7 @@ def DQN_iforest(x, model):
     latent_x = model.get_latent(x)
     latent_x = latent_x.cpu().detach().numpy()
     # calculate anomaly scores in the latent space
-    iforest = IsolationForest().fit(latent_x)
+    iforest = IsolationForest(n_estimators=100).fit(latent_x)
     scores = -iforest.decision_function(latent_x)
     # normalize the scores
     # scores = np.array([-1 * s + 0.5 for s in scores])

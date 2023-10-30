@@ -31,7 +31,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
+                    default='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
@@ -42,7 +42,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='FGANomaly',
+parser.add_argument("--model", type=str, default='TcnED',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 
@@ -137,18 +137,18 @@ def main():
                 clf.sample_selection = args.sample_selection
                 # clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
                 # clf.fit(train_data, train_labels, test_data, labels)
-                clf.fit(train_data, None, test_data, labels)
+                # clf.fit(train_data, None, test_data, labels)
                 # clf.fit(test_data, labels)
                 # clf.fit(train_data, labels)
 
-                # env = ADEnv(
-                #     dataset=train_data,
-                #     y=None,
-                #     clf=clf,
-                #     num_sample=1000
-                # )
-                # dqnss = DQNSS(env)
-                # dqnss.OD_fit(test_data, labels)
+                env = ADEnv(
+                    dataset=train_data,
+                    y=None,
+                    clf=clf,
+                    num_sample=1000
+                )
+                dqnss = DQNSS(env)
+                dqnss.OD_fit(test_data, labels)
 
                 t = time.time() - t1
 
