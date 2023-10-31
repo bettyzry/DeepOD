@@ -287,9 +287,26 @@ class DQNSS():
                 self.env.clf.net.train()
         return
 
-    def warmup(self):
-        # 把3种action和他们的reward输入进memory去
-        return
+    def warmup_steps(self):
+        """
+        Implement the warmup steps to fill the replay memory using random actions
+        """
+        for _ in range(self.num_warmup_steps):
+            state_a, state_t = self.env.reset_state()
+            data = torch.tensor(self.env.train_seqs[state_t, :], dtype=torch.float32, device=self.device).unsqueeze(0)
+            for t in range(self.steps_per_episode):
+                action = np.random.randint(0, self.n_actions)           # 随机挑选一个行动
+                next_state_a, reward = self.env.step(action, state_a, state_t)
+                reward = get_total_reward(action, reward, self.losses, state_t, d=self.env.e, o=self.l, a=self.a)
+                reward = torch.tensor([reward], dtype=torch.float32, device=self.device)
+                next_data = torch.tensor(self.env.x[next_state_a: next_state_a+self.env.clf.seq_len], dtype=torch.float32,
+                                           device=self.device).unsqueeze(0)
+
+                # Store the transition in memory
+                self.memory.push(data, torch.tensor([[action]], device=self.device), next_data, reward, state_t, next_state_a)
+                data = next_data
+                state_a = next_state_a
+                state_t = self.env.from_sa2st(next_state_a)
 
     def SS_fit(self, epoch):
         """
@@ -301,6 +318,7 @@ class DQNSS():
         if epoch == 0:
             self.Init_params()
         self.get_reward_dis()
+        self.warmup_steps()
         self.reset_counters()
 
         reward = pd.DataFrame()
@@ -309,7 +327,7 @@ class DQNSS():
         reward['2'] = self.a * self.env.reward_dis + (1 - self.a) * self.l
         self.reward = reward.values
         index = np.argmax(self.reward, axis=1)
-        self.init_model()
+        # self.init_model()
 
         for i_episode in range(self.num_episodes):
             self.policy_net.eval()
@@ -333,7 +351,7 @@ class DQNSS():
                 # states.append((self.env.x[observation,:],action.item()))
 
                 # reward = get_total_reward(action, reward, self.intrinsic_rewards, state_a, e=self.env.e, i=self.i, a=self.a)
-                reward = get_total_reward(action, reward, self.losses, state_t, e=self.env.e, i=self.l, a=self.a)
+                reward = get_total_reward(action, reward, self.losses, state_t, d=self.env.e, o=self.l, a=self.a)
 
                 reward_history.append(reward)
                 reward = torch.tensor([reward], dtype=torch.float32, device=self.device)

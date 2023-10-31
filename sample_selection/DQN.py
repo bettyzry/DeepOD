@@ -22,7 +22,7 @@ class DQN(nn.Module):
         self.n_actions = n_actions
         self.device = device
         self.latent = nn.Sequential(
-            nn.Linear(n_feature, hidden_size),
+            nn.Linear(n_feature, hidden_size)
         )
         # self.output_layer = nn.Linear(self.seq_len*self.hidden_size, n_actions)
         self.output_layer = nn.Linear(hidden_size, n_actions)

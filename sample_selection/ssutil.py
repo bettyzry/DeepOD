@@ -25,23 +25,56 @@ def DQN_iforest(x, model):
     return norm_scores
 
 
-def get_total_reward(action, reward_e, intrinsic_rewards, state_t, e, i, write_rew=False, a=0.5):
+def get_total_reward(action, dis, intrinsic_rewards, state_t, d, o, write_rew=False, a=0.5):
     if torch.is_tensor(action):
         action = action.numpy()[0][0]
-    reward_i = intrinsic_rewards[state_t]
+    os = intrinsic_rewards[state_t]
     if write_rew:
-        write_reward('./results/rewards.csv', reward_i, reward_e)
+        write_reward('./results/rewards.csv', os, dis)
     # 0扩展，1保持，2删除
     if action == 0:
-        reward_e = (2 * e - reward_e)
-        reward_i = reward_i
+        reward_e = (2 * d - dis)
+        reward_i = os
     elif action == 1:
-        reward_e = (2 * e - reward_e)
-        reward_i = (2 * i - reward_i)
+        reward_e = (2 * d - dis)
+        reward_i = (2 * o - os)
     else:
-        reward_e = reward_e
-        reward_i = i
+        reward_e = dis
+        reward_i = o
     reward = a * reward_e + (1 - a) * reward_i
+    # if action == 0:             # 扩展
+    #     if dis <= d:
+    #         if os <= o:
+    #             reward = 0
+    #         else:
+    #             reward = 1
+    #     else:
+    #         if os <= o:
+    #             reward = -1
+    #         else:
+    #             reward = -2
+    # elif action == 1:
+    #     if dis <= d:
+    #         if os <= o:
+    #             reward = 1
+    #         else:
+    #             reward = 0
+    #     else:
+    #         if os <= o:
+    #             reward = -1
+    #         else:
+    #             reward = -2
+    # else:   # action == 2
+    #     if dis <= d:
+    #         if os <= o:
+    #             reward = -2
+    #         else:
+    #             reward = -1
+    #     else:
+    #         if os <= o:
+    #             reward = 0
+    #         else:
+    #             reward = 1
     return reward
 
 

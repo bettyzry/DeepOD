@@ -42,7 +42,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='TcnED',
+parser.add_argument("--model", type=str, default='NeuTraLTS',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 
@@ -137,18 +137,18 @@ def main():
                 clf.sample_selection = args.sample_selection
                 # clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
                 # clf.fit(train_data, train_labels, test_data, labels)
-                # clf.fit(train_data, None, test_data, labels)
+                clf.fit(train_data, None, test_data, labels)
                 # clf.fit(test_data, labels)
                 # clf.fit(train_data, labels)
 
-                env = ADEnv(
-                    dataset=train_data,
-                    y=None,
-                    clf=clf,
-                    num_sample=1000
-                )
-                dqnss = DQNSS(env)
-                dqnss.OD_fit(test_data, labels)
+                # env = ADEnv(
+                #     dataset=train_data,
+                #     y=None,
+                #     clf=clf,
+                #     num_sample=1000
+                # )
+                # dqnss = DQNSS(env)
+                # dqnss.OD_fit(test_data, labels)
 
                 t = time.time() - t1
 
