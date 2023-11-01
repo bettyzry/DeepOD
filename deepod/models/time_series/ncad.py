@@ -269,6 +269,7 @@ class NCAD(BaseDeepAD):
         return
 
     def inference_forward(self, x0, net, criterion):
+        size = len(x0)
         y0 = np.zeros(x0.shape[0])
         y0 = torch.tensor(y0)
         if self.coe_rate > 0:
@@ -306,8 +307,8 @@ class NCAD(BaseDeepAD):
         probs_anomaly = torch.sigmoid(logits_anomaly)
         # Calculate Loss
         loss = torch.nn.BCELoss(reduction='none')(probs_anomaly, y0)
-        loss = loss.mean(axis=1)
-        return y0, loss
+        loss = loss[:size]
+        return y0[:size], loss
 
     def training_prepare(self, X, y):
         self.train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=False)

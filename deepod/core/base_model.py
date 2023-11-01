@@ -166,7 +166,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         # self.pca = PCA(n_components=32)
         self.true_key_param = None
         self.param_musk = None
-        self.params = []
+        self.params = None
         self.all_v = None
         self.trainsets = {}
         self.result_detail = []
@@ -177,6 +177,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.a = a
         self.rate = (1-rate) * 100
         self.optimizer = None
+        self.Arxiv17 = {'avg': [], 'std': []}
         return
 
     def fit(self, X, y=None):
@@ -507,22 +508,36 @@ class BaseDeepAD(metaclass=ABCMeta):
             if epoch > 0 and self.train_label is not None:
                 self.trainsets['yseq' + str(epoch)] = self.trainsets['yseq' + str(epoch-1)][np.sort(index)]
 
-        elif self.sample_selection == 7:        # 我的方法
-            if epoch >= 10:
-                return
+        elif self.sample_selection == 2:        # 临时测试
+            sample = 10
+            if self.params is None:
+                self.init_param()
+            for ii, batch_x in enumerate(self.train_loader):
+                if ii == sample:
+                    metric, _ = self.get_importance_dL(batch_x)
+                    self.Arxiv17['avg'].append(np.average(metric))
+                    self.Arxiv17['std'].append(np.std(metric))
 
+        elif self.sample_selection == 7:        # 我的方法
+            # if epoch <= 5:
+            #     return
+            # elif epoch > 15:
+            #     return
+            if epoch > 10:
+                return
+            if self.params is None:
+                self.init_param()
             dis = np.zeros(len(self.train_data))
             importance = None
             metrics = np.array([])
             losses = np.array([])
             self.net.eval()
-            self.init_param()
             for ii, batch_x in enumerate(self.train_loader):
-                # metric = self.get_importance_dL(batch_x)
+                # metric, loss = self.get_importance_dL(batch_x)
                 metric, loss = self.get_importance_ICLR21(batch_x)
-                # metric = self.get_importance_ICML17(batch_x)       # 巨慢
+                # metric, loss = self.get_importance_ICML17(batch_x)       # 巨慢
 
-                if epoch == 0:
+                if self.param_musk is None:
                     if ii == 0:
                         importance = np.sum(metric, axis=0)
                     else:
@@ -536,13 +551,13 @@ class BaseDeepAD(metaclass=ABCMeta):
                         losses = np.concatenate((losses, loss), axis=0)
 
                 #
-                # if epoch == 0:      # 只累计importance
+                # if self.param_musk is None:      # 只累计importance
                 #     pass
                 # else:
                 #     dis[ii*self.batch_size: (ii+1)*self.batch_size] = np.linalg.norm(self.true_key_param-metric, axis=1) # L2范数
             self.net.train()
 
-            if epoch == 0:
+            if self.param_musk is None:
                 self.param_musk = np.sort(importance.argsort()[::-1][:1000])     # 前10000个最重要的数据
                 # self.true_key_param = importance[self.param_musk] / len(self.train_data)
             else:
@@ -565,12 +580,11 @@ class BaseDeepAD(metaclass=ABCMeta):
                 # df = pd.DataFrame(metrics)
                 # df.to_csv('@g_detail/TcnED-DASADS-ICLR21-ori/%s.csv' % str(epoch))
                 reward = pd.DataFrame()
-                d = np.percentile(dis, self.rate)
-                l = np.percentile(losses, self.rate)
-                reward['0'] = self.a * (2 * d - dis) + (1 - self.a) * losses
-                reward['1'] = self.a * (2 * d - dis) + (1 - self.a) * (
-                            2 * l - losses)
-                reward['2'] = self.a * dis + (1 - self.a) * l
+                # d = np.percentile(dis, self.rate)
+                # l = np.percentile(losses, self.rate)
+                reward['0'] = self.a * (1 - dis) + (1 - self.a) * losses
+                reward['1'] = self.a * (1 - dis) + (1 - self.a) * (1 - losses)
+                reward['2'] = self.a * dis + (1 - self.a) * 0.5
 
                 actions = np.argmax(reward.values, axis=1)
 
@@ -622,6 +636,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             print('ERROR')
 
     def init_param(self):
+        self.params = []
         for ii, batch_x in enumerate(self.train_loader):
             _, losses = self.inference_forward(batch_x, self.net, self.criterion)
             params = [p for p in self.net.parameters() if p.requires_grad]
@@ -662,7 +677,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         # # metric = metric / mean      # 按列归一化
         # gv_metric = np.divide(gv_metric, mean, out=np.zeros_like(gv_metric, dtype=np.float64), where=mean != 0)
         # gv_metric = normalize(gv_metric, axis=1, norm='l2')   # 对metric按行进行归一化
-        return gv_metric
+        return gv_metric, losses.cpu().detach().numpy()
 
     def get_importance_ICLR21(self, batch_x):
         _, losses = self.inference_forward(batch_x, self.net, self.criterion)
@@ -722,7 +737,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         # H = np.linalg.inv(gv_metric2)
         # gv_metric1 = np.array(gv_metric1)
         # metric = np.dot(H, gv_metric1) / size
-        return metric
+        return metric, losses.cpu().detach().numpy()
 
     def s_test(self, z_train, batch_x, damp=0.01, scale=25.0,
                recursion_depth=5000):

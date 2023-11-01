@@ -34,7 +34,7 @@ class TimesNet(BaseDeepAD):
         if X_seqs is not None and y_seqs is not None:
             pass
         else:
-            if self.sample_selection == 4 or self.sample_selection == 7:
+            if self.sample_selection == 2 or self.sample_selection == 7:
                 self.ori_data = X
                 self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
                 self.trainsets['seqstarts0'] = self.seq_starts

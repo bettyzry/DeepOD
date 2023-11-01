@@ -29,14 +29,14 @@ from deepod.models.time_series.tcned import TcnED
 from deepod.models.time_series.ncad import NCAD
 from deepod.models.time_series.neutralTS import NeuTraLTS
 from deepod.models.time_series.lstmed import LSTMED
-from deepod.models.time_series.dcdetector import DCdetector
+# from deepod.models.time_series.dcdetector import DCdetector
 from deepod.models.time_series.fganomaly import FGANomaly
 
 
 __all__ = [
     'RCA', 'DeepSVDD', 'GOAD', 'NeuTraL', 'NCAD', 'RDP', 'ICL', 'SLAD', 'DeepIsolationForest',
     'DeepSAD', 'DevNet', 'PReNet', 'FeaWAD', 'REPEN', 'RoSAS', 'FGANomaly',
-    'TimesNet', 'AnomalyTransformer', 'TranAD', 'COUTA', 'USAD', 'TcnED', 'LSTMED', 'DCdetector',
+    'TimesNet', 'AnomalyTransformer', 'TranAD', 'COUTA', 'USAD', 'TcnED', 'LSTMED',
     'DeepIsolationForestTS', 'DeepSVDDTS', 'NeuTraLTS',
     'PReNetTS', 'DeepSADTS', 'DevNetTS'
 ]

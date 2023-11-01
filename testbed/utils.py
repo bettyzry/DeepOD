@@ -11,6 +11,15 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 # --------------------------- data preprocessing --------------------------- #
 
+def get_lr(dataset_name, model_name, ori_lr):
+    lr = ori_lr
+    if model_name == 'NCAD':
+        if 'ASD' in dataset_name:
+            lr = 0.000002
+        elif 'DASADS' in dataset_name:
+            lr = 0.0000002
+    return lr
+
 
 def data_standardize(X_train, X_test, remove=False, verbose=False, max_clip=5, min_clip=-4):
     mini, maxi = X_train.min(), X_train.max()

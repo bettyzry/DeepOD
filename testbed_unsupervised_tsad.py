@@ -12,13 +12,14 @@ import yaml
 import time
 import importlib as imp
 import numpy as np
-from testbed.utils import import_ts_data_unsupervised
+from testbed.utils import import_ts_data_unsupervised, get_lr
 from deepod.metrics import ts_metrics, point_adjustment
 import pandas as pd
 from insert_outlier import insert_outlier
-from sample_selection.DQNSS import DQNSS
-from sample_selection.ENV import ADEnv
-from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution
+# from sample_selection.DQNSS import DQNSS
+# from sample_selection.QSS import QSS
+# from sample_selection.ENV import ADEnv
+# from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution
 
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
 
@@ -31,7 +32,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
+                    default='DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
@@ -42,7 +43,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='NeuTraLTS',
+parser.add_argument("--model", type=str, default='NCAD',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 
@@ -52,9 +53,8 @@ parser.add_argument("--note", type=str, default='')
 
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
-# parser.add_argument('--lr', type=float, default=0.0001)
 
-parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
 parser.add_argument('--insert_outlier', type=float, default=0)      # 0不插入异常，1插入异常
 parser.add_argument('--rate', type=int, default=20)                # 异常数目
 args = parser.parse_args()
@@ -77,8 +77,6 @@ with open(path) as f:
 model_configs['seq_len'] = args.seq_len
 model_configs['stride'] = args.stride
 
-print(f'Model Configs: {model_configs}')
-
 
 def main():
     # # setting result file/folder path
@@ -86,7 +84,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     result_file = os.path.join(args.output_dir, f'{args.model}.{args.flag}.csv')
     # # setting loss file/folder path
-    funcs = ['norm', 'myfunc-addo', None, None, None, 'ICLM21', 'Arxiv22', 'myfunc']
+    funcs = ['norm', 'myfunc-addo', 'Arxiv17', None, None, 'ICLM21', 'Arxiv22', 'myfunc']
     trainsets_dir = f'{args.trainsets_dir}/{args.model}.{args.flag}/'
     os.makedirs(trainsets_dir, exist_ok=True)
 
@@ -128,6 +126,9 @@ def main():
 
             entries = []
             t_lst = []
+            lr = get_lr(dataset_name, args.model, model_configs['lr'])
+            model_configs['lr'] = lr
+            print(f'Model Configs: {model_configs}')
             for i in range(args.runs):
                 print(f'\nRunning [{i+1}/{args.runs}] of [{args.model}] [{funcs[args.sample_selection]}] on Dataset [{dataset_name}]')
                 print(f'\ninsert outlier [{args.insert_outlier}] with pollution rate [{args.rate}]')
@@ -138,16 +139,17 @@ def main():
                 # clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
                 # clf.fit(train_data, train_labels, test_data, labels)
                 clf.fit(train_data, None, test_data, labels)
+                # clf.fit(train_data)
                 # clf.fit(test_data, labels)
                 # clf.fit(train_data, labels)
 
                 # env = ADEnv(
                 #     dataset=train_data,
                 #     y=None,
-                #     clf=clf,
-                #     num_sample=1000
+                #     clf=clf
                 # )
-                # dqnss = DQNSS(env)
+                # # dqnss = DQNSS(env)
+                # dqnss = QSS(env)
                 # dqnss.OD_fit(test_data, labels)
 
                 t = time.time() - t1
@@ -169,10 +171,13 @@ def main():
 
                 if not args.silent_header:
                     trainsets_df = pd.DataFrame.from_dict(clf.trainsets, orient='index').transpose()
-                    trainsets_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(args.rate) + str(i)+'.csv', index=False)
+                    trainsets_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(args.rate*args.insert_outlier) + str(i)+'.csv', index=False)
                     if len(clf.result_detail) != 0:
                         df_result = pd.DataFrame(clf.result_detail, columns=['auc', 'pr', 'f1', 'adjauc', 'adjpr', 'adjf1'])
-                        df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{funcs[args.sample_selection]}.{args.rate}.{i}.csv'))
+                        df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{funcs[args.sample_selection]}.{args.rate*args.insert_outlier}.{i}.csv'))
+                    Arxiv17_df = pd.DataFrame.from_dict(clf.Arxiv17, orient='index').transpose()
+                    Arxiv17_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(args.rate*args.insert_outlier) + str(i)+'.csv', index=False)
+
 
             avg_entry = np.average(np.array(entries), axis=0)
             std_entry = np.std(np.array(entries), axis=0)
