@@ -22,10 +22,22 @@ class DQN(nn.Module):
         self.n_actions = n_actions
         self.device = device
         self.latent = nn.Sequential(
-            nn.Linear(n_feature, hidden_size)
+          nn.Linear(n_feature, 35),
+          nn.ReLU(),
+          nn.Linear(35, 30),
+          nn.ReLU(),
+          nn.Linear(30, 25),
+          nn.ReLU(),
+          nn.Linear(25, 20),
+          nn.ReLU(),
+          nn.Linear(20, 15),
+          nn.ReLU(),
+          nn.Linear(15, 10),
+          nn.ReLU(),
+          nn.Linear(10, 5)
         )
         # self.output_layer = nn.Linear(self.seq_len*self.hidden_size, n_actions)
-        self.output_layer = nn.Linear(hidden_size, n_actions)
+        self.output_layer = nn.Linear(5, n_actions)
 
     def forward(self, x):
         if not isinstance(x, torch.Tensor):

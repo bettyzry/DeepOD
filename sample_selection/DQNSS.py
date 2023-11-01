@@ -151,14 +151,14 @@ class DQNSS():
 
         train_loader = DataLoader(train_dataset, batch_size=batch_size,
                                   shuffle=True, pin_memory=True)
-        optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=0.001, weight_decay=1e-5)
-        for e in range(20):
+        optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=0.001)
+        for e in range(50):
             losslist = []
             for state_batch, y_batch in train_loader:
                 state_action_values = self.policy_net(state_batch)
                 # loss = nn.CosineEmbeddingLoss(reduction='mean')(state_action_values, y_batch, torch.ones([len(state_batch)]))
-                # loss = nn.MSELoss(reduction='mean')(state_action_values, y_batch)
-                loss = nn.SmoothL1Loss(reduction='mean')(state_action_values, y_batch)
+                loss = nn.MSELoss(reduction='mean')(state_action_values, y_batch)
+                # loss = nn.SmoothL1Loss(reduction='mean')(state_action_values, y_batch)
                 optimizer.zero_grad()
                 loss.backward()
                 # In-place gradient clipping
@@ -322,12 +322,15 @@ class DQNSS():
         self.reset_counters()
 
         reward = pd.DataFrame()
-        reward['0'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * self.losses
-        reward['1'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * (2*self.l - self.losses)
-        reward['2'] = self.a * self.env.reward_dis + (1 - self.a) * self.l
+        # reward['0'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * self.losses
+        # reward['1'] = self.a * (2*self.env.e - self.env.reward_dis) + (1 - self.a) * (2*self.l - self.losses)
+        # reward['2'] = self.a * self.env.reward_dis + (1 - self.a) * self.l
+        reward['0'] = self.a * (1 - self.env.reward_dis) + (1 - self.a) * self.losses
+        reward['1'] = self.a * (1 - self.env.reward_dis) + (1 - self.a) * (1 - self.losses)
+        reward['2'] = self.a * self.env.reward_dis + (1 - self.a) * 0.5
         self.reward = reward.values
         index = np.argmax(self.reward, axis=1)
-        # self.init_model()
+        self.init_model()
 
         for i_episode in range(self.num_episodes):
             self.policy_net.eval()
