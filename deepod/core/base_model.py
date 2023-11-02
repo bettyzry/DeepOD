@@ -106,7 +106,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                  n_ensemble=1, seq_len=100, stride=1,
                  epoch_steps=-1, prt_steps=10,
                  device='cuda', contamination=0.1,
-                 verbose=1, random_state=42, sample_selection=0, a=0.2, rate=0.1):
+                 verbose=1, random_state=42, sample_selection=0, a=0.5, rate=0.1):
         self.model_name = model_name
 
         self.data_type = data_type
@@ -533,8 +533,8 @@ class BaseDeepAD(metaclass=ABCMeta):
             losses = np.array([])
             self.net.eval()
             for ii, batch_x in enumerate(self.train_loader):
-                # metric, loss = self.get_importance_dL(batch_x)
-                metric, loss = self.get_importance_ICLR21(batch_x)
+                metric, loss = self.get_importance_dL(batch_x)
+                # metric, loss = self.get_importance_ICLR21(batch_x)
                 # metric, loss = self.get_importance_ICML17(batch_x)       # 巨慢
 
                 if self.param_musk is None:
@@ -650,7 +650,8 @@ class BaseDeepAD(metaclass=ABCMeta):
     def init_param_musk(self):
         importance = None
         for ii, batch_x in enumerate(self.train_loader):
-            metric, _ = self.get_importance_ICLR21(batch_x)
+            # metric, _ = self.get_importance_ICLR21(batch_x)
+            metric, _ = self.get_importance_dL(batch_x)
             # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
             if ii == 0:
                 importance = np.sum(metric, axis=0)
@@ -673,10 +674,9 @@ class BaseDeepAD(metaclass=ABCMeta):
 
             gv_metric.append(abs(gv))
 
-        # mean = np.mean(gv_metric, axis=0)
-        # # metric = metric / mean      # 按列归一化
-        # gv_metric = np.divide(gv_metric, mean, out=np.zeros_like(gv_metric, dtype=np.float64), where=mean != 0)
-        # gv_metric = normalize(gv_metric, axis=1, norm='l2')   # 对metric按行进行归一化
+        mean = np.mean(gv_metric, axis=0)
+        gv_metric = np.divide(gv_metric, mean, out=np.zeros_like(gv_metric, dtype=np.float64), where=mean != 0)
+        gv_metric = normalize(gv_metric, axis=1, norm='l2')   # 对metric按行进行归一化
         return gv_metric, losses.cpu().detach().numpy()
 
     def get_importance_ICLR21(self, batch_x):

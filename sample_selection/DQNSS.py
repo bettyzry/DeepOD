@@ -77,7 +77,7 @@ class DQNSS():
         # tensor rapresentation of the dataset used in the intrinsic reward
         self.x_tensor = torch.tensor(self.env.train_seqs, dtype=torch.float32, device=self.device)
         #  n actions and n observations
-        self.n_actions = self.env.action_space.n  # 可以执行的行动的数量
+        self.n_actions = self.env.action_space  # 可以执行的行动的数量
         self.n_feature = self.env.n_feature  # 有错？？
         self.reset()
 
@@ -143,7 +143,7 @@ class DQNSS():
                 # .view(1, 1): 变成1*1的格式
                 return self.policy_net(data).max(1)[1].view(1, 1)
         else:
-            return torch.tensor([[self.env.action_space.sample()]], device=self.device, dtype=torch.long)
+            return torch.tensor([[random.randint(0, self.env.action_space-1)]], device=self.device, dtype=torch.long)
 
     def init_model(self):
         batch_size = 4
@@ -228,8 +228,8 @@ class DQNSS():
         metrics = []
         losses = []
         for ii, batch_x in enumerate(self.env.clf.train_loader):
-            # metric = self.get_importance_dL(batch_x, epoch, ii)
-            metric, loss = self.env.clf.get_importance_ICLR21(batch_x)
+            metric, loss = self.env.clf.get_importance_dL(batch_x)
+            # metric, loss = self.env.clf.get_importance_ICLR21(batch_x)
             # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
             if ii == 0:
                 metrics = metric

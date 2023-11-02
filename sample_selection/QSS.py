@@ -77,7 +77,7 @@ class QSS():
         # tensor rapresentation of the dataset used in the intrinsic reward
         self.x_tensor = torch.tensor(self.env.train_seqs, dtype=torch.float32, device=self.device)
         #  n actions and n observations
-        self.n_actions = self.env.action_space.n  # 可以执行的行动的数量
+        self.n_actions = self.env.action_space  # 可以执行的行动的数量
         self.n_feature = self.env.n_feature  # 有错？？
         self.reset()
 
@@ -117,16 +117,16 @@ class QSS():
              with torch.no_grad():
                 return np.argmax(self.reward[state_t])
         else:
-            return self.env.action_space.sample()
+            return random.randint(0, self.env.action_space-1)
 
     def get_reward_dis(self):
         self.env.clf.net.eval()
         metrics = []
         losses = []
         for ii, batch_x in enumerate(self.env.clf.train_loader):
-            # metric = self.get_importance_dL(batch_x, epoch, ii)
-            metric, loss = self.env.clf.get_importance_ICLR21(batch_x)
-            # metric = self.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
+            metric, loss = self.env.clf.get_importance_dL(batch_x)
+            # metric, loss = self.env.clf.get_importance_ICLR21(batch_x)
+            # metric,loss = self.env.clf.get_importance_ICML17(batch_x, epoch, ii)       # 巨慢
             if ii == 0:
                 metrics = metric
                 losses = loss

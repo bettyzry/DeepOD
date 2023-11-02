@@ -1,17 +1,9 @@
 import random
-
-import gym
 import numpy as np
-
-from gym import spaces
-from sample_selection.ssutil import percentile
 from deepod.utils.utility import get_sub_seqs_label
-import torch
-from sklearn.ensemble import IsolationForest
-from torch.utils.data import DataLoader
 
 
-class ADEnv(gym.Env):
+class ADEnv():
     """
     Customized environment for anomaly detection
     """
@@ -22,7 +14,6 @@ class ADEnv(gym.Env):
         Initialize anomaly environment for DPLAN algorithm.
         :param num_sample: Number of sampling for the generator g_u
         """
-        super().__init__()
         self.reward_dis = None
         self.e = 0.5
         self.device = device
@@ -42,11 +33,9 @@ class ADEnv(gym.Env):
         # 贪婪算法选择行动时，为了提高效率进行了采样。如果训练集少于numsample，则使用全集
         self.num_sample = min(num_sample, len(self.train_start))
 
-        # state space:
-        self.state_space = spaces.Discrete(self.n_samples)  # 状态空间（全部的训练集)
-
         # action space: # 0扩展，1保持，2删除
-        self.action_space = spaces.Discrete(3)  # 0扩展，1保持，2删除.0扩展1删除
+        # self.action_space = spaces.Discrete(3)  # 0扩展，1保持，2删除.0扩展1删除
+        self.action_space = 3  # 0扩展，1保持，2删除.0扩展1删除
 
         # initial state
         self.state_a = None  # state in all data 当前状态在全部数据中的索引值

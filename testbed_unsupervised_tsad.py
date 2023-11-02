@@ -32,7 +32,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='ASD,DASADS,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
+                    default='UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
@@ -43,7 +43,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='TcnED',
+parser.add_argument("--model", type=str, default='NCAD',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 
@@ -54,7 +54,7 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=8)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
 parser.add_argument('--insert_outlier', type=float, default=0)      # 0不插入异常，1插入异常
 parser.add_argument('--rate', type=int, default=20)                # 异常数目
 args = parser.parse_args()
@@ -176,7 +176,7 @@ def main():
                     if len(clf.result_detail) != 0:
                         df_result = pd.DataFrame(clf.result_detail, columns=['auc', 'pr', 'f1', 'adjauc', 'adjpr', 'adjf1'])
                         df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{funcs[args.sample_selection]}.{args.rate*args.insert_outlier}.{i}.csv'))
-                    if len(clf.Arxiv17) != 0:
+                    if args.sample_selection == 2:
                         clf.Arxiv17['std_avg'] = (clf.Arxiv17['avg']-np.min(clf.Arxiv17['avg']))/(np.max(clf.Arxiv17['avg'])-np.min(clf.Arxiv17['avg']))
                         clf.Arxiv17['std_std'] = (clf.Arxiv17['std']-np.min(clf.Arxiv17['std']))/(np.max(clf.Arxiv17['std'])-np.min(clf.Arxiv17['std']))
                         Arxiv17_df = pd.DataFrame.from_dict(clf.Arxiv17, orient='index').transpose()
