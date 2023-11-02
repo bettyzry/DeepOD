@@ -18,6 +18,11 @@ def get_lr(dataset_name, model_name, ori_lr):
             lr = 0.000002
         elif 'DASADS' in dataset_name:
             lr = 0.0000002
+    if model_name == 'NeuTraLTS':
+        if 'heart_vbeat2' in dataset_name or 'SWaT' in dataset_name:
+            lr = 0.0001
+        elif 'ASD' in dataset_name:
+            lr = 0.001
     return lr
 
 

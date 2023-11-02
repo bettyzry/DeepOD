@@ -146,13 +146,13 @@ class DQNSS():
             return torch.tensor([[self.env.action_space.sample()]], device=self.device, dtype=torch.long)
 
     def init_model(self):
-        batch_size = 16
+        batch_size = 4
         train_dataset = TensorDataset(torch.Tensor(self.env.train_seqs), torch.Tensor(self.reward))
 
         train_loader = DataLoader(train_dataset, batch_size=batch_size,
                                   shuffle=True, pin_memory=True)
         optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=0.001)
-        for e in range(50):
+        for e in range(20):
             losslist = []
             for state_batch, y_batch in train_loader:
                 state_action_values = self.policy_net(state_batch)
