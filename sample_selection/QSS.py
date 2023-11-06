@@ -47,6 +47,8 @@ class QSS():
         :param destination_path: the path where to save the model
         :param device: the device to use for training
         """
+        self.policy_reward = None
+        self.target_reward = None
         self.reward = None
         self.device = device
         self.env = env
@@ -164,8 +166,9 @@ class QSS():
         for epoch in range(self.env.clf.epochs):
             t1 = time.time()
             loss = self.env.clf.training(epoch)
-            self.SS_fit(epoch)
-            self.sample_selection(epoch)
+            if epoch < 10:
+                self.SS_fit(epoch)
+                self.sample_selection(epoch)
 
             print(f'epoch{epoch + 1:3d}, '
                   f'training loss: {loss:.6f}, '
@@ -202,13 +205,14 @@ class QSS():
         reward['0'] = self.a * (1 - self.env.reward_dis) + (1 - self.a) * self.losses
         reward['1'] = self.a * (1 - self.env.reward_dis) + (1 - self.a) * (1 - self.losses)
         reward['2'] = self.a * self.env.reward_dis + (1 - self.a) * 0.5
+        self.reward = reward.values
         self.policy_reward = reward.values
         self.target_reward = self.policy_reward
-        index = np.argmax(self.reward, axis=1)
+        index = np.argmax(self.target_reward, axis=1)
 
         for i_episode in range(self.num_episodes):
 
-            actions = np.argmax(self.reward, axis=1)
+            actions = np.argmax(self.target_reward, axis=1)
             # Initialize the environment and get it's state
             reward_history = []
 
@@ -219,8 +223,8 @@ class QSS():
                 next_state_a, _ = self.env.step(action, state_a, state_t)
                 next_state_t = self.env.from_sa2st(next_state_a)
                 # reward = get_total_reward(action, reward, self.losses, state_t, d=self.env.e, o=self.l, a=self.a)
-                reward = self.reward[state_t]
-                self.policy_reward[state_t] = self.reward[t] + self.GAMMA*np.max(self.target_reward[next_state_t])
+                reward = self.reward[state_t][action]
+                self.policy_reward[state_t][action] = self.reward[state_t][action] + self.GAMMA*np.max(self.target_reward[next_state_t])
                 reward_history.append(reward)
                 state_a = next_state_a
                 state_t = self.env.from_sa2st(next_state_a)
@@ -235,14 +239,14 @@ class QSS():
         print('Complete')
 
     def sample_selection(self, epoch):
-        actions = np.argmax(self.reward, axis=1)
+        actions = np.argmax(self.target_reward, axis=1)
 
         add_index = np.where(actions == 0)[0]
         add_seq_starts = self.env.train_start[add_index]
         add_seq_starts = np.sort(add_seq_starts)
 
         delet_index = np.where(actions == 2)[0]
-        self.seq_starts = np.delete(self.env.train_start, delet_index, axis=0)
+        self.env.train_start = np.delete(self.env.train_start, delet_index, axis=0)
 
         for add_seq_start in add_seq_starts:
             if add_seq_start - self.env.clf.split[0] >= 0:
@@ -259,6 +263,10 @@ class QSS():
 
         self.env.train_seqs = np.array([self.env.x[i:i + self.env.seq_len] for i in self.env.train_start])  # 添加划分的数据
         self.env.clf.n_samples = len(self.env.train_seqs)
+
+        self.env.clf.train_data = np.array([self.env.x[i:i + self.env.seq_len] for i in self.env.train_start])  # 添加划分的数据
+        self.env.clf.train_loader = DataLoader(self.env.clf.train_data, batch_size=self.env.clf.batch_size, drop_last=False,
+                                       shuffle=True, pin_memory=True)
 
         y_seqs = get_sub_seqs_label2(self.env.y, seq_starts=self.env.train_start,
                                      seq_len=self.env.seq_len) if self.env.y is not None else None

@@ -196,9 +196,9 @@ class NeuTraLTS(BaseDeepAD):
         return output, error
 
     def training_prepare(self, X, y):
-        self.train_loader = DataLoader(dataset=SubseqData(X),
+        self.train_loader = DataLoader(dataset=X,
                                   batch_size=self.batch_size,
-                                  drop_last=True, pin_memory=True, shuffle=True)
+                                  drop_last=False, pin_memory=True, shuffle=True)
 
         self.net = TabNeutralADNet(
             n_features=self.n_features,

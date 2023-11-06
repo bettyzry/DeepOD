@@ -22,29 +22,35 @@ class DQN(nn.Module):
         self.n_actions = n_actions
         self.device = device
         self.latent = nn.Sequential(
-          nn.Linear(n_feature, 35),
-          nn.ReLU(),
-          nn.Linear(35, 30),
-          nn.ReLU(),
-          nn.Linear(30, 25),
-          nn.ReLU(),
-          nn.Linear(25, 20),
-          nn.ReLU(),
-          nn.Linear(20, 15),
-          nn.ReLU(),
-          nn.Linear(15, 10),
-          nn.ReLU(),
-          nn.Linear(10, 5)
+          nn.Linear(n_feature, hidden_size)
         )
         # self.output_layer = nn.Linear(self.seq_len*self.hidden_size, n_actions)
-        self.output_layer = nn.Linear(5, n_actions)
+        self.time_layer = nn.Sequential(
+            nn.Conv2d(
+                in_channels=seq_len,  # input height
+                out_channels=10,  # n_filters
+                kernel_size=5,  # filter size
+            ),
+            nn.Linear(seq_len, 10),
+            nn.ReLU(),
+            nn.Linear(10, 1)
+        )
+        self.cnn = nn.Conv1d(in_channels=seq_len, out_channels=10, kernel_size=1)
+        self.l1 = nn.Linear(10, 10)
+        self.l2 = nn.Linear(10, 1)
+        self.output_layer = nn.Linear(hidden_size, n_actions)
 
     def forward(self, x):
         if not isinstance(x, torch.Tensor):
             x = torch.as_tensor(x, dtype=torch.float32, device=self.device)
         x = F.relu(self.latent(x))
+        x = self.cnn(x)
+        x = x.permute(0, 2, 1)
+        x = F.relu(self.l1(x))
+        x = F.relu(self.l2(x))
+        x = x.permute(0, 2, 1)
         x = self.output_layer(x)
-        x = torch.sum(x, dim=1)
+        x = x.squeeze()
         return x
 
     def get_latent(self, x):
@@ -92,3 +98,19 @@ class DQN(nn.Module):
     #         x = torch.as_tensor(x, dtype=torch.float32, device=self.device)
     #     latent_embs = F.relu(self.latent(x))
     #     return latent_embs
+
+
+if __name__ == '__main__':
+    batch_size = 64
+    seq_len = 30
+    n_feature = 55
+    input = torch.randn(batch_size, seq_len, n_feature)
+    d = DQN(n_feature, seq_len, 10, 3, device='gpu')
+    out = d(input)
+    print(out.size())
+    # conv1 = nn.Conv1d(in_channels=256, out_channels = 100, kernel_size = 2)
+    # input = torch.randn(32, 35, 256)
+    # # batch_size x text_len x embedding_size -> batch_size x embedding_size x text_len
+    # input = input.permute(0, 2, 1)
+    # out = conv1(input)
+    # print(out.size())

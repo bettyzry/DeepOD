@@ -201,22 +201,31 @@ def plotT(data_root, step):
 
 
 def pollution_rate():
+    fontsize = 18
+    plt.figure(dpi=300, figsize=(8,6))
+    # 改变文字大小参数-fontsize
+    plt.xticks(fontsize=fontsize)
+    plt.yticks(fontsize=fontsize)
+
     func = 'adjf1'
     # rates = [0.0, 0.1, 0.2, 0.3, 0.4]
-    rates = [ 0.2, 0.4, 0.6, 0.8]
+    rates = [0.2, 0.4, 0.6, 0.8]
     runs = 0
-    name = 'SWaT_cut'
+    name = 'DASADS'
     for ii, rate in enumerate(rates):
         # /home/xuhz/zry/DeepOD-new/@records/TranAD.SMAP_combined.norm.0.0.csv
-        data_root = '/home/xuhz/zry/DeepOD-new/@records/TranAD.%s.norm.%s.%s.csv' % (name, str(rate), str(runs))
+        # data_root = '/home/xuhz/zry/DeepOD-new/@records/TranAD.%s.norm.%s.%s.csv' % (name, str(rate), str(runs))
+        data_root = '/home/xuhz/zry/DeepOD-new/plotsource/per_by_rate/TranAD.DASADS_combined.norm.%s.0.csv' % str(rate)
         df = pd.read_csv(data_root)
         y = df[func].values
-        plt.plot(y, label=str(rate))
-    plt.legend()
-    plt.xlabel('epoch')
-    plt.ylabel(func)
-    plt.title('TranAD.'+name)
-    plt.show()
+        plt.plot(y, label=str(int(rate*100))+'% symnoise')
+    plt.legend(fontsize=fontsize)
+    plt.xlabel('Epoch', fontsize=fontsize)
+    plt.ylabel('F1', fontsize=fontsize)
+    # plt.title('')
+    # plt.show()
+    plt.savefig('./plotsource/f1_rate.eps', dpi=300)
+    plt.savefig('./plotsource/f1_rate.png', dpi=300)
 
 
 def plot_hotmap():
@@ -326,9 +335,9 @@ def plot_singledata_param():
 
 
 if __name__ == '__main__':
-    plot_loss_distribution()
+    # plot_loss_distribution()
     # plot_dis_distribution()
-    # pollution_rate()
+    pollution_rate()    # 随污染率增加f1的变化
     # plot_hotmap()
     # plot_param_distribution()
     # plot_singledata_param()

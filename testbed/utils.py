@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 # --------------------------- data preprocessing --------------------------- #
 
-def get_lr(dataset_name, model_name, ori_lr):
+def get_lr(dataset_name, model_name, ori_lr, ori_epoch):
     lr = ori_lr
     if model_name == 'NCAD':
         if 'ASD' in dataset_name:
@@ -25,7 +25,13 @@ def get_lr(dataset_name, model_name, ori_lr):
             lr = 0.0001
         elif 'ASD' in dataset_name:
             lr = 0.001
-    return lr
+        elif 'PUMP' in dataset_name:
+            lr = 0.001
+    epoch = ori_epoch
+    if model_name == 'NeuTraLTS':
+        if 'PUMP' in dataset_name:
+            epoch = 20
+    return lr, epoch
 
 
 def data_standardize(X_train, X_test, remove=False, verbose=False, max_clip=5, min_clip=-4):
