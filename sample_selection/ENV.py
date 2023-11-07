@@ -1,6 +1,7 @@
 import random
 import numpy as np
-from deepod.utils.utility import get_sub_seqs_label
+from deepod.utils.utility import get_sub_seqs, get_sub_seqs_label
+from torch.utils.data import DataLoader
 
 
 class ADEnv():
@@ -20,7 +21,15 @@ class ADEnv():
         self.seq_len = seq_len
         self.stride = stride
 
+        self.clf = clf
+
         # Dataset infos
+        valid_num = int(len(dataset) * self.clf.valid_rate)
+        valid_x = dataset[-valid_num:]
+        dataset = dataset[:-valid_num]
+        valid_seqs = get_sub_seqs(valid_x, seq_len=self.seq_len, stride=self.stride)
+        self.clf.valid_loader = DataLoader(valid_seqs, batch_size=self.clf.batch_size, shuffle=True, drop_last=False)
+
         self.n_samples, self.n_feature = dataset.shape
         self.x = dataset  # 原始数据
         self.train_start = np.arange(0, self.n_samples - seq_len + 1, stride)  # 训练集序列的索引标签（初始化为无重复的序列开头）
@@ -43,7 +52,6 @@ class ADEnv():
         self.DQN = None
         self.loss = []
 
-        self.clf = clf
         self.init_clf()
 
     def init_clf(self):

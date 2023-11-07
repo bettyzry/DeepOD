@@ -182,7 +182,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.valid_losses = []
         self.valid_rate = 0.2
         self.valid_loader = None
-        self.early_stopping = EarlyStopping(min_delta=0.0001)
+        self.early_stopping = EarlyStopping(patience=3, min_delta=0.001)
         return
 
     def Early_stopping(self):
@@ -190,10 +190,9 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.net.eval()  # prep model for evaluation
         valid_losses = []
         for valid_batch in self.valid_loader:
+            valid_batch = valid_batch.float().to(self.device)
             # forward pass: compute predicted outputs by passing inputs to the model
-            output = self.net(valid_batch)
-            # calculate the loss
-            loss = self.criterion(output, valid_batch)
+            loss = self.training_forward(valid_batch, self.net, self.criterion)
             # record validation loss
             valid_losses.append(loss.item())
         valid_loss = np.average(valid_losses)
@@ -201,16 +200,14 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.early_stopping(valid_loss)
 
     def data_prepare(self, X, y=None, X_seqs=None, y_seqs=None):
-        if X_seqs is not None and y_seqs is not None:
+        if X_seqs is not None:
             valid_num = int(len(X_seqs) * self.valid_rate)
             valid_seqs = X_seqs[-valid_num:]
             X_seqs = X_seqs[:-valid_num]
-            y_seqs = y_seqs[:-valid_num]
         else:
             valid_num = int(len(X) * self.valid_rate)
             valid_x = X[-valid_num:]
             X = X[:-valid_num]
-            y = y[:-valid_num]
             valid_seqs = get_sub_seqs(valid_x, seq_len=self.seq_len, stride=self.stride)
             if self.sample_selection == 4 or self.sample_selection == 7:
                 self.ori_data = X

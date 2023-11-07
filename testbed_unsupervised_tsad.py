@@ -44,7 +44,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='NeuTraLTS',
+parser.add_argument("--model", type=str, default='TcnED',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 
@@ -55,7 +55,7 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=8)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
 parser.add_argument('--insert_outlier', type=float, default=0)      # 0不插入异常，1插入异常
 parser.add_argument('--rate', type=int, default=20)                # 异常数目
 args = parser.parse_args()

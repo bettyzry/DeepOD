@@ -37,6 +37,8 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         if insert_outlier == 1:
             if 'ASD' in dataset_name:
                 lr = 0.0015
+        else:   # 正常处理
+            pass
     return lr, epoch
 
 
