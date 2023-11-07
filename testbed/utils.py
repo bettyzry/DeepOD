@@ -11,15 +11,19 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 # --------------------------- data preprocessing --------------------------- #
 
-def get_lr(dataset_name, model_name, ori_lr, ori_epoch):
+def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
     lr = ori_lr
+    epoch = ori_epoch
     if model_name == 'NCAD':
+        lr = 0.0000002
         if 'ASD' in dataset_name:
             lr = 0.000002
         elif 'DASADS' in dataset_name:
             lr = 0.0000002
         elif 'heart_vbeat_' in dataset_name:
             lr = 0.00000002
+        elif 'SMAP' in dataset_name:
+            lr = 0.0000000002
     if model_name == 'NeuTraLTS':
         if 'heart_vbeat2' in dataset_name or 'SWaT' in dataset_name:
             lr = 0.0001
@@ -27,10 +31,12 @@ def get_lr(dataset_name, model_name, ori_lr, ori_epoch):
             lr = 0.001
         elif 'PUMP' in dataset_name:
             lr = 0.001
-    epoch = ori_epoch
-    if model_name == 'NeuTraLTS':
-        if 'PUMP' in dataset_name:
             epoch = 20
+
+    if model_name == 'TcnED':
+        if insert_outlier == 1:
+            if 'ASD' in dataset_name:
+                lr = 0.0015
     return lr, epoch
 
 

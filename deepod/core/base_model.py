@@ -26,6 +26,8 @@ from scipy.spatial.distance import pdist
 from sklearn.preprocessing import normalize
 import torch.nn.functional as F
 from sklearn.ensemble import IsolationForest
+from deepod.core.EarlyStopping import EarlyStopping
+from deepod.metrics import ts_metrics, point_adjustment
 
 
 class BaseDeepAD(metaclass=ABCMeta):
@@ -108,7 +110,6 @@ class BaseDeepAD(metaclass=ABCMeta):
                  device='cuda', contamination=0.1,
                  verbose=1, random_state=42, sample_selection=0, a=0.5, rate=0.1):
         self.model_name = model_name
-
         self.data_type = data_type
         self.network = network
 
@@ -178,6 +179,100 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.rate = (1-rate) * 100
         self.optimizer = None
         self.Arxiv17 = {'avg': [], 'std': []}
+        self.valid_losses = []
+        self.valid_rate = 0.2
+        self.valid_loader = None
+        self.early_stopping = EarlyStopping(min_delta=0.0001)
+        return
+
+    def Early_stopping(self):
+        # 早停
+        self.net.eval()  # prep model for evaluation
+        valid_losses = []
+        for valid_batch in self.valid_loader:
+            # forward pass: compute predicted outputs by passing inputs to the model
+            output = self.net(valid_batch)
+            # calculate the loss
+            loss = self.criterion(output, valid_batch)
+            # record validation loss
+            valid_losses.append(loss.item())
+        valid_loss = np.average(valid_losses)
+        self.net.train()
+        self.early_stopping(valid_loss)
+
+    def data_prepare(self, X, y=None, X_seqs=None, y_seqs=None):
+        if X_seqs is not None and y_seqs is not None:
+            valid_num = int(len(X_seqs) * self.valid_rate)
+            valid_seqs = X_seqs[-valid_num:]
+            X_seqs = X_seqs[:-valid_num]
+            y_seqs = y_seqs[:-valid_num]
+        else:
+            valid_num = int(len(X) * self.valid_rate)
+            valid_x = X[-valid_num:]
+            X = X[:-valid_num]
+            y = y[:-valid_num]
+            valid_seqs = get_sub_seqs(valid_x, seq_len=self.seq_len, stride=self.stride)
+            if self.sample_selection == 4 or self.sample_selection == 7:
+                self.ori_data = X
+                self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
+                self.trainsets['seqstarts0'] = self.seq_starts
+                X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
+                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
+            else:
+                X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
+                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
+
+        self.train_data = X_seqs
+        self.train_label = y_seqs
+        self.valid_loader = DataLoader(valid_seqs, batch_size=self.batch_size, shuffle=True, drop_last=False)
+        self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
+        if self.train_label is not None:
+            self.trainsets['yseq0'] = self.train_label
+            self.ori_label = y
+
+    def fit_RODA(self, X, y=None, Xtest=None, Ytest=None, X_seqs=None, y_seqs=None):
+        """
+        Fit detector. y is ignored in unsupervised methods.
+
+        Parameters
+        ----------
+        X : numpy array of shape (n_samples, n_features)
+            The input samples.
+
+        y : numpy array of shape (n_samples, )
+            Not used in unsupervised methods, present for API consistency by convention.
+            used in (semi-/weakly-) supervised methods
+
+        Returns
+        -------
+        self : object
+            Fitted estimator.
+        """
+        self.data_prepare(X, y, X_seqs, y_seqs)
+        self.training_prepare(self.train_data, y=self.train_label)
+        for epoch in range(self.epochs):
+            t1 = time.time()
+            loss = self.training(epoch)
+            self.do_sample_selection(epoch)
+
+            print(f'epoch{epoch + 1:3d}, '
+                  f'training loss: {loss:.6f}, '
+                  f'time: {time.time() - t1:.1f}s')
+
+            if Xtest is not None and Ytest is not None:
+                self.net.eval()
+                scores = self.decision_function(Xtest)
+                eval_metrics = ts_metrics(Ytest, scores)
+                adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
+                result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
+                          adj_eval_metrics[2]]
+                print(result)
+                self.result_detail.append(result)
+                self.net.train()
+
+            if self.early_stopping.early_stop:
+                print("Early stopping")
+                break
         return
 
     def fit(self, X, y=None):
@@ -418,6 +513,11 @@ class BaseDeepAD(metaclass=ABCMeta):
         scores = torch.cat(score_lst).data.cpu().numpy()
 
         return z, scores
+
+    @abstractmethod
+    def training(self, epoch):
+        """define forward step in training"""
+        pass
 
     @abstractmethod
     def training_forward(self, batch_x, net, criterion):

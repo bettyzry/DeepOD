@@ -39,35 +39,7 @@ class DCdetector(BaseDeepAD):
         return
 
     def fit(self, X, y=None, Xtest=None, Ytest=None, X_seqs=None, y_seqs=None):
-        if X_seqs is not None and y_seqs is not None:
-            pass
-        else:
-            if self.sample_selection == 4 or self.sample_selection == 7:
-                self.ori_data = X
-                self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
-                self.trainsets['seqstarts0'] = self.seq_starts
-                X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
-                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
-            else:
-                X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
-                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
-        self.train_data = X_seqs
-        self.train_label = y_seqs
-        self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
-        if self.train_label is not None:
-            self.trainsets['yseq0'] = self.train_label
-            self.ori_label = y
-
-        self.training_prepare(self.train_data, y=self.train_label)
-        self.net.train()
-        for e in range(self.epochs):
-            t1 = time.time()
-            loss = self.training(e)
-            print(f'Epoch {e + 1},\t L1 = {loss},\t time={time.time()-t1}')
-
-        # self.decision_scores_ = self.decision_function(X)
-        # self.labels_ = self._process_decision_scores()
-        return
+        self.fit_RODA(X, y, Xtest, Ytest, X_seqs, y_seqs)
 
     def decision_function(self, X, return_rep=False):
         seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=1)

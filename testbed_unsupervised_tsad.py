@@ -33,7 +33,8 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
 
 parser.add_argument("--dataset", type=str,
                     default='PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
-                    help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
+                    help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut,'
+                         'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat,UCR_natural_insect,UCR_natural_mars',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     )
@@ -126,7 +127,7 @@ def main():
 
             entries = []
             t_lst = []
-            lr, epoch = get_lr(dataset_name, args.model, model_configs['lr'], model_configs['epochs'])
+            lr, epoch = get_lr(dataset_name, args.model, args.insert_outlier, model_configs['lr'], model_configs['epochs'])
             model_configs['lr'] = lr
             model_configs['epochs'] = epoch
             print(f'Model Configs: {model_configs}')
@@ -204,45 +205,27 @@ def main():
                 f.close()
 
 
+def count_datasets(dname, entities, combine):
+    dataset_name_lst = dname.split(',')
+    for dataset in dataset_name_lst:
+        # # import data
+        data_pkg = import_ts_data_unsupervised(dataset_root,
+                                               dataset, entities=entities,
+                                               combine=combine)
+        train_lst, test_lst, label_lst, name_lst = data_pkg
+
+        for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
+            Ntrain = len(train_data)
+            Ntest = len(test_data)
+            Otest = sum(labels)
+            print('%s,%d,%d,%d' % (dataset_name, Ntrain, Ntest, Otest))
+
+
 if __name__ == '__main__':
+    # print("dataset_name,Ntrain,Ntest,Otest")
+    # dname = 'ASD,DASADS,PUMP,SMD,MSL,SMAP,SWaT_cut'
+    # dname_mean = 'UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2'
+    # count_datasets(dname, 'FULL', 1)
+    # count_datasets(dname_mean, 'FULL', 0)
+
     main()
-    # for i in [0, 5, 10, 15, 20]:        # 0, 5, 6, 7
-    #     print(i)
-    #     args.silent_header = False
-    #     args.insert_outlier = 1
-    #     args.sample_selection = 7
-    #     args.runs = 5
-    #     args.rate = i
-    #     main()
-
-    # for i in [7]:
-    #     print(i)
-    #     args.insert_outlier = 0
-    #     args.sample_selection = i
-    #     args.runs = 5
-    #     args.rate = 0
-    #     main()
-
-    # for rate in [0, 0.2, 0.4, 0.6, 0.8]:
-    #     print(rate)
-    #     args.rate = rate
-    #     args.runs = 1
-    #     args.sample_selection=0
-    #     main()
-
-    # args.rate = 0
-    # args.runs = 1
-    # args.sample_selection=7
-    # args.model = 'TcnED'
-    # main()
-
-    # args.rate = 0.1
-    # args.sample_selection = 1
-    # args.runs = 0
-    # main()
-
-    # for model in ['TcnED', 'TimesNet', 'TranAD', 'AnomalyTransformer']:
-    #     args.runs = 5
-    #     args.model = model
-    #     args.sample_selection = 7
-    #     main()

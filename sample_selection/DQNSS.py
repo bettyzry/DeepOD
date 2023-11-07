@@ -157,7 +157,8 @@ class DQNSS():
             for state_batch, y_batch in train_loader:
                 state_action_values = self.policy_net(state_batch)
                 # loss = nn.CosineEmbeddingLoss(reduction='mean')(state_action_values, y_batch, torch.ones([len(state_batch)]))
-                loss = nn.MSELoss(reduction='mean')(state_action_values, y_batch)
+                loss = My_loss()(state_action_values, y_batch)
+                # loss = nn.MSELoss(reduction='mean')(state_action_values, y_batch)
                 # loss = nn.SmoothL1Loss(reduction='mean')(state_action_values, y_batch)
                 optimizer.zero_grad()
                 loss.backward()
@@ -446,3 +447,22 @@ class DQNSS():
     #     self.policy_net.load_state_dict(torch.load(file_path))
     #     self.target_net.load_state_dict(self.policy_net.state_dict())
 
+
+class My_loss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x, y):
+        cos_sim = nn.CosineSimilarity(dim=1, eps=1e-6)
+        return 1 - cos_sim(x, y)
+
+
+if __name__ == '__main__':
+    a = torch.tensor([[1, 2, 3], [2, 3, 4]])
+    b = torch.tensor([[5, 7, 8], [5, 4, 6]])
+    # a = torch.tensor([1, 2], dtype=float)
+    # b = torch.tensor([5, 7], dtype=float)
+
+    cos_sim = nn.CosineEmbeddingLoss(reduction='mean')
+    sim = cos_sim(a, b, torch.ones([len(a)]))
+    print(sim) # tensor(0.9878, dtype=torch.float64)
