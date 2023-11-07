@@ -136,16 +136,14 @@ class QSS():
                 metrics = np.concatenate((metrics, metric), axis=0)
                 losses = np.concatenate((losses, loss), axis=0)
 
-        _range = np.max(losses) - np.min(losses)
-        losses = (losses - np.min(losses)) / _range
+        losses = (losses - np.min(losses)) / (np.max(losses) - np.min(losses))
         self.losses = losses
         self.l = np.percentile(losses, self.rate)
 
         metric_torch = torch.tensor(metrics, dtype=torch.float32, device='cpu')
         self.env.clf.iforest.fit(metric_torch)
         reward_dis = -self.env.clf.iforest.decision_function(metric_torch)
-        _range = np.max(reward_dis) - np.min(reward_dis)
-        reward_dis = (reward_dis - np.min(reward_dis)) / _range
+        reward_dis = (reward_dis - np.min(reward_dis)) / (np.max(reward_dis) - np.min(reward_dis))
         self.env.reward_dis = reward_dis
         self.env.e = np.percentile(reward_dis, self.rate)
 
@@ -253,9 +251,9 @@ class QSS():
                 self.env.train_start = np.append(self.env.train_start, add_seq_start - self.env.clf.split[0])
             if add_seq_start + self.env.clf.split[1] < len(self.env.x) - self.env.clf.seq_len + 1:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start + self.env.clf.split[1])
-            if add_seq_start - self.env.clf.split[1] > 0:
+            if add_seq_start - self.env.clf.split[1] >= 0:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start - self.env.clf.split[1])
-            if add_seq_start + self.env.clf.split[0] <= len(self.env.x) - self.env.clf.seq_len + 1:
+            if add_seq_start + self.env.clf.split[0] < len(self.env.x) - self.env.clf.seq_len + 1:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start + self.env.clf.split[0])
 
         self.env.train_start = np.sort(self.env.train_start)

@@ -123,12 +123,13 @@ class NeuTraLTS(BaseDeepAD):
             loss_lst.append(loss)
 
         epoch_loss = torch.mean(torch.stack(loss_lst)).data.cpu().item()
-        self.Early_stopping()
         return epoch_loss
 
     def training_forward(self, batch_x, net, criterion):
-        """define forward step in training"""
-        return
+        batch_x = batch_x.float().to(self.device)
+        x0_output = self.net(batch_x)
+        loss = self.criterion(x0_output)
+        return loss
 
     def inference_forward(self, batch_x, net, criterion):
         batch_x = batch_x.float().to(self.device)

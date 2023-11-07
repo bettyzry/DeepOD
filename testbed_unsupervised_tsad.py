@@ -32,7 +32,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
+                    default='UCR_natural_fault,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
                     help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut,'
                          'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat,UCR_natural_insect,UCR_natural_mars',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
@@ -44,7 +44,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='TcnED',
+parser.add_argument("--model", type=str, default='TranAD',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 

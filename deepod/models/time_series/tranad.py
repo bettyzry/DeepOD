@@ -113,7 +113,6 @@ class TranAD(BaseDeepAD):
                     break
 
         self.scheduler.step()
-        self.Early_stopping()
         return np.mean(l1s)
 
     def inference(self, dataloader):
@@ -137,8 +136,22 @@ class TranAD(BaseDeepAD):
         return l1s, preds
 
     def training_forward(self, batch_x, net, criterion):
-        """define forward step in training"""
-        return
+        n = self.epoch + 1
+        l1s, l2s = [], []
+
+        local_bs = batch_x.shape[0]  # (128，30，19)
+        window = batch_x.permute(1, 0, 2)  # (30, 128, 19)
+        elem = window[-1, :, :].view(1, local_bs, self.n_features)  # (1, 128, 19)
+
+        window = window.float().to(self.device)
+        elem = elem.float().to(self.device)
+
+        z = self.net(window, elem)
+        l1 = (1 / n) * self.criterion(z[0], elem) + (1 - 1 / n) * self.criterion(z[1], elem)  # (1, 128, 19)
+
+        l1s.append(torch.mean(l1).item())
+        loss = torch.mean(l1)
+        return loss
 
     def inference_forward(self, batch_x, net, criterion):
         local_bs = batch_x.shape[0]

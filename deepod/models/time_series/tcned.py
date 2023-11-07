@@ -75,7 +75,6 @@ class TcnED(BaseDeepAD):
 
         self.epoch_update()
         loss = total_loss / cnt
-        self.Early_stopping()
         return loss
 
     def training_prepare(self, X, y):

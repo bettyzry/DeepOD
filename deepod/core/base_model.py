@@ -121,6 +121,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.stride = stride
 
         self.epochs = epochs
+        self.epoch = 0
         self.batch_size = batch_size
         self.lr = lr
 
@@ -183,6 +184,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.valid_rate = 0.2
         self.valid_loader = None
         self.early_stopping = EarlyStopping(patience=3, min_delta=0.001)
+        self.ss_epoch = 10
         return
 
     def Early_stopping(self):
@@ -248,6 +250,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.data_prepare(X, y, X_seqs, y_seqs)
         self.training_prepare(self.train_data, y=self.train_label)
         for epoch in range(self.epochs):
+            self.epoch = epoch
             t1 = time.time()
             loss = self.training(epoch)
             self.do_sample_selection(epoch)
@@ -267,6 +270,8 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.result_detail.append(result)
                 self.net.train()
 
+            if epoch >= self.ss_epoch:
+                self.Early_stopping()
             if self.early_stopping.early_stop:
                 print("Early stopping")
                 break
@@ -620,7 +625,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             #     return
             # elif epoch > 15:
             #     return
-            if epoch > 10:
+            if epoch > self.ss_epoch:
                 return
             if self.params is None:
                 self.init_param()
@@ -670,8 +675,8 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.true_key_param = importance
                 dis = np.linalg.norm(importance - metrics, axis=1, ord=np.Inf)
 
-                _range = np.max(losses) - np.min(losses)
-                losses = (losses - np.min(losses)) / _range
+                dis = (dis - np.min(dis)) / (np.max(dis) - np.min(dis))
+                losses = (losses - np.min(losses)) / (np.max(losses) - np.min(losses))
 
                 # metrics = np.insert(metrics, 0, self.train_label, axis=1)
                 # df = pd.DataFrame(metrics)
@@ -679,6 +684,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                 reward = pd.DataFrame()
                 # d = np.percentile(dis, self.rate)
                 # l = np.percentile(losses, self.rate)
+                self.a = 1 - 1/(epoch+2)
                 reward['0'] = self.a * (1 - dis) + (1 - self.a) * losses
                 reward['1'] = self.a * (1 - dis) + (1 - self.a) * (1 - losses)
                 reward['2'] = self.a * dis + (1 - self.a) * 0.5
@@ -710,9 +716,9 @@ class BaseDeepAD(metaclass=ABCMeta):
                         self.seq_starts = np.append(self.seq_starts, add_seq_start - self.split[0])
                     if add_seq_start + self.split[1] < len(self.ori_data) - self.seq_len + 1:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start + self.split[1])
-                    if add_seq_start - self.split[1] > 0:
+                    if add_seq_start - self.split[1] >= 0:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start - self.split[1])
-                    if add_seq_start + self.split[0] <= len(self.ori_data) - self.seq_len + 1:
+                    if add_seq_start + self.split[0] < len(self.ori_data) - self.seq_len + 1:
                         self.seq_starts = np.append(self.seq_starts, add_seq_start + self.split[0])
 
                 self.seq_starts = np.sort(self.seq_starts)

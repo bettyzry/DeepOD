@@ -410,9 +410,9 @@ class DQNSS():
                 self.env.train_start = np.append(self.env.train_start, add_seq_start - self.env.clf.split[0])
             if add_seq_start + self.env.clf.split[1] < len(self.env.x) - self.env.clf.seq_len + 1:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start + self.env.clf.split[1])
-            if add_seq_start - self.env.clf.split[1] > 0:
+            if add_seq_start - self.env.clf.split[1] >= 0:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start - self.env.clf.split[1])
-            if add_seq_start + self.env.clf.split[0] <= len(self.env.x) - self.env.clf.seq_len + 1:
+            if add_seq_start + self.env.clf.split[0] < len(self.env.x) - self.env.clf.seq_len + 1:
                 self.env.train_start = np.append(self.env.train_start, add_seq_start + self.env.clf.split[0])
 
         self.env.train_start = np.sort(self.env.train_start)

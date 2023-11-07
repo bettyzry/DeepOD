@@ -23,12 +23,6 @@ DeepSVDDTS:
   batch_size: 128
   epoch_steps: -1
 
-TranAD:
-  lr: 0.000001
-  epochs: 50
-  batch_size: 64
-  epoch_steps: -1
-
 USAD:
   hidden_dims: 100
   lr: 1e-3
@@ -57,6 +51,12 @@ TcnED:
   kernel_size: 2
   rep_dim: 8
   hidden_dims: '8,8'
+
+TranAD:
+  lr: 0.000001
+  epochs: 50
+  batch_size: 64
+  epoch_steps: -1
 
 AnomalyTransformer:
   lr: 0.0001

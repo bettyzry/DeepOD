@@ -178,8 +178,33 @@ class AnomalyTransformer(BaseDeepAD):
         return test_energy, preds  # (n,d)
 
     def training_forward(self, batch_x, net, criterion):
-        """define forward step in training"""
-        return
+        input = batch_x.float().to(self.device)
+        output, series, prior, _ = self.net(input)
+
+        # calculate Association discrepancy
+        series_loss = 0.0
+        prior_loss = 0.0
+        for u in range(len(prior)):
+            series_loss += (torch.mean(my_kl_loss(series[u], (
+                    prior[u] / torch.unsqueeze(torch.sum(prior[u], dim=-1), dim=-1).repeat(1, 1, 1,
+                                                                                           self.seq_len)).detach())) + torch.mean(
+                my_kl_loss((prior[u] / torch.unsqueeze(torch.sum(prior[u], dim=-1), dim=-1).repeat(1, 1, 1,
+                                                                                                   self.seq_len)).detach(),
+                           series[u])))
+            prior_loss += (torch.mean(my_kl_loss(
+                (prior[u] / torch.unsqueeze(torch.sum(prior[u], dim=-1), dim=-1).repeat(1, 1, 1,
+                                                                                        self.seq_len)),
+                series[u].detach())) + torch.mean(
+                my_kl_loss(series[u].detach(), (
+                        prior[u] / torch.unsqueeze(torch.sum(prior[u], dim=-1), dim=-1).repeat(1, 1, 1,
+                                                                                               self.seq_len)))))
+        series_loss = series_loss / len(prior)
+        prior_loss = prior_loss / len(prior)
+
+        rec_loss = criterion(output, input)  # compute loss
+
+        loss = rec_loss - self.k * series_loss
+        return loss
 
     def inference_forward(self, batch_x, net, criterion):
         criterion = nn.MSELoss(reduction='none')

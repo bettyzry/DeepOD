@@ -31,47 +31,7 @@ class TimesNet(BaseDeepAD):
         self.num_kernels = num_kernels
 
     def fit(self, X, y=None, Xtest=None, Ytest=None, X_seqs=None, y_seqs=None):
-        if X_seqs is not None and y_seqs is not None:
-            pass
-        else:
-            if self.sample_selection == 2 or self.sample_selection == 7:
-                self.ori_data = X
-                self.seq_starts = np.arange(0, X.shape[0] - self.seq_len + 1, self.seq_len)  # 无重叠计算seq
-                self.trainsets['seqstarts0'] = self.seq_starts
-                X_seqs = np.array([X[i:i + self.seq_len] for i in self.seq_starts])
-                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.seq_len) if y is not None else None
-            else:
-                X_seqs = get_sub_seqs(X, seq_len=self.seq_len, stride=self.stride)
-                y_seqs = get_sub_seqs_label(y, seq_len=self.seq_len, stride=self.stride) if y is not None else None
-        self.train_data = X_seqs
-        self.train_label = y_seqs
-        self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
-        if self.train_label is not None:
-            self.trainsets['yseq0'] = self.train_label
-            self.ori_label = y
-
-        self.training_prepare(self.train_data, y=self.train_label)
-
-        self.net.train()
-        for e in range(self.epochs):
-            t1 = time.time()
-            loss = self.training()
-            self.do_sample_selection(e)
-
-            print(f'epoch{e + 1:3d}, '
-                  f'training loss: {loss:.6f}, '
-                  f'time: {time.time() - t1:.1f}s')
-
-            if Xtest is not None and Ytest is not None:
-                self.net.eval()
-                scores = self.decision_function(Xtest)
-                eval_metrics = ts_metrics(Ytest, scores)
-                adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
-                result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
-                          adj_eval_metrics[2]]
-                print(result)
-                self.result_detail.append(result)
-                self.net.train()
+        self.fit_RODA(X, y, Xtest, Ytest, X_seqs, y_seqs)
         return
 
     def training_prepare(self, X, y):
@@ -109,7 +69,7 @@ class TimesNet(BaseDeepAD):
 
         return loss_final_pad
 
-    def training(self):
+    def training(self, epoch):
         criterion = nn.MSELoss()
         train_loss = []
 
@@ -177,8 +137,10 @@ class TimesNet(BaseDeepAD):
         return test_energy, preds
 
     def training_forward(self, batch_x, net, criterion):
-        """define forward step in training"""
-        return
+        batch_x = batch_x.float().to(self.device)  # (bs, seq_len, dim)
+        outputs = self.net(batch_x)  # (bs, seq_len, dim)
+        loss = nn.MSELoss()(outputs[:, -1:, :], batch_x[:, -1:, :])
+        return loss
 
     def inference_forward(self, batch_x, net, criterion):
         batch_x = batch_x.float().to(self.device)

@@ -32,13 +32,25 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         elif 'PUMP' in dataset_name:
             lr = 0.001
             epoch = 20
+    if model_name == 'TranAD':
+        lr = 0.000001
+        if 'gait' in dataset_name:
+            lr = 0.000001
+        elif 'mars' in dataset_name or 'MSL' in dataset_name:
+            lr = 0.0001
+        elif 'fault' in dataset_name:
+            lr = 0.0001
 
     if model_name == 'TcnED':
+        lr = 0.00015
         if insert_outlier == 1:
             if 'ASD' in dataset_name:
                 lr = 0.0015
         else:   # 正常处理
-            pass
+            if 'fault' in dataset_name:
+                lr = 0.0015
+            elif 'heart_sbeat_' in dataset_name:
+                lr = 0.000015
     return lr, epoch
 
 
