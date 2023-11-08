@@ -774,9 +774,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             gv = torch.cat([g.view(-1) for g in g_loss]).cpu().detach().numpy()
             if self.param_musk is not None:
                 gv = gv[self.param_musk]    # 只保留最重要的万个参数
-
             gv_metric.append(abs(gv))
-
         mean = np.mean(gv_metric, axis=0)
         gv_metric = np.divide(gv_metric, mean, out=np.zeros_like(gv_metric, dtype=np.float64), where=mean != 0)
         gv_metric = normalize(gv_metric, axis=1, norm='l2')   # 对metric按行进行归一化

@@ -20,26 +20,40 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
             lr = 0.000002
         elif 'DASADS' in dataset_name:
             lr = 0.0000002
-        elif 'heart_vbeat_' in dataset_name:
+        elif 'heart_vbeat-' in dataset_name:
             lr = 0.00000002
-        elif 'SMAP' in dataset_name:
+        elif 'SMAP' in dataset_name:    # 有问题
             lr = 0.0000000002
+        elif 'fault' in dataset_name or 'sbeat' in dataset_name or 'insect' in dataset_name or 'mars' in dataset_name:
+            # 有问题
+            lr = 0.0000000002
+
     if model_name == 'NeuTraLTS':
-        if 'heart_vbeat2' in dataset_name or 'SWaT' in dataset_name:
+        lr = 0.001
+        if 'gait' in dataset_name:
+            lr = 0.001
+        elif 'heart_vbeat2' in dataset_name or 'fault' in dataset_name or 'heart_vbeat-' in dataset_name\
+                or 'insect' in dataset_name or 'mars' in dataset_name:
+            lr = 0.00001     # 未定
+        elif 'SWaT' in dataset_name:
             lr = 0.0001
         elif 'ASD' in dataset_name:
             lr = 0.001
         elif 'PUMP' in dataset_name:
             lr = 0.001
             epoch = 20
+
     if model_name == 'TranAD':
         lr = 0.000001
-        if 'gait' in dataset_name:
+        if 'mars' in dataset_name:
+            lr = 0.0001
+        elif 'MSL' in dataset_name:
+            lr = 0.0001
+        elif 'SMAP' in dataset_name:
             lr = 0.000001
-        elif 'mars' in dataset_name or 'MSL' in dataset_name:
-            lr = 0.0001
-        elif 'fault' in dataset_name:
-            lr = 0.0001
+        elif 'fault' in dataset_name or 'gait' in dataset_name or 'heart_sbeat' in dataset_name or 'heart_vbeat-' in dataset_name\
+            or 'heart_vbeat2' in dataset_name or 'insect' in dataset_name:
+            lr = 0.00001
 
     if model_name == 'TcnED':
         lr = 0.00015
@@ -47,10 +61,19 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
             if 'ASD' in dataset_name:
                 lr = 0.0015
         else:   # 正常处理
-            if 'fault' in dataset_name:
+            if 'heart_sbeat' in dataset_name:
+                lr = 0.00015
+            elif 'fault' in dataset_name:
                 lr = 0.0015
-            elif 'heart_sbeat_' in dataset_name:
-                lr = 0.000015
+            elif 'heart_vbeat-' in dataset_name or 'heart_vbeat2' in dataset_name or 'insect' in dataset_name \
+                    or 'mars' in dataset_name or 'gait' in dataset_name:
+                lr = 0.015     # 未定
+
+            elif 'ASD' in dataset_name or 'DASADS' in dataset_name or 'MSL' in dataset_name \
+                    or 'PUMP' in dataset_name or 'SMD' in dataset_name:
+                lr = 0.00015
+            elif 'SMAP' in dataset_name or 'SWaT' in dataset_name:
+                lr = 0.0015
     return lr, epoch
 
 
@@ -215,6 +238,11 @@ def read_data(file, split='50%-normal', normalization='z-score', seed=42):
 
 
 def import_ts_data_unsupervised(data_root, data, entities=None, combine=False):
+    if data[:3] == 'UCR':
+        combine = False
+    else:
+        combine = True
+
     if type(entities) == str:
         entities_lst = entities.split(',')
     elif type(entities) == list:
@@ -249,7 +277,7 @@ def import_ts_data_unsupervised(data_root, data, entities=None, combine=False):
             train_lst.append(train)
             test_lst.append(test)
             label_lst.append(labels)
-            name_lst.append(m)
+            name_lst.append(data+'-'+m)
 
         if combine:
             train_lst = [np.concatenate(train_lst)]

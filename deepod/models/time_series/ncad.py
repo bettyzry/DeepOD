@@ -209,9 +209,8 @@ class NCAD(BaseDeepAD):
         return epoch_loss
 
     def training_forward(self, x0, net, criterion):
-        x0 = x0.float().to(self.device)
         y0 = np.zeros(x0.shape[0])
-        y0 = torch.tensor(y0)
+        y0 = torch.tensor(y0).to(self.device)
         if self.coe_rate > 0:
             x_oe, y_oe = coe_batch(
                 x=x0.transpose(2, 1),
@@ -250,46 +249,14 @@ class NCAD(BaseDeepAD):
         return loss
 
     def inference_forward(self, x0, net, criterion):
-        size = len(x0)
-        y0 = np.zeros(x0.shape[0])
-        y0 = torch.tensor(y0)
-        if self.coe_rate > 0:
-            x_oe, y_oe = coe_batch(
-                x=x0.transpose(2, 1),
-                y=y0,
-                coe_rate=self.coe_rate,
-                suspect_window_length=self.s_length,
-                random_start_end=True,
-            )
-            # Add COE to training batch
-            x0 = torch.cat((x0, x_oe.transpose(2, 1)), dim=0)
-            y0 = torch.cat((y0, y_oe), dim=0)
+        criterion = NCADLoss(reduction='none')
+        x = x0.float().to(self.device)
+        x_c = x[:, :-self.s_length]
+        x_output, xc_output = self.net(x, x_c)
 
-        if self.mixup_rate > 0.0:
-            x_mixup, y_mixup = mixup_batch(
-                x=x0.transpose(2, 1),
-                y=y0,
-                mixup_rate=self.mixup_rate,
-            )
-            # Add Mixup to training batch
-            x0 = torch.cat((x0, x_mixup.transpose(2, 1)), dim=0)
-            y0 = torch.cat((y0, y_mixup), dim=0)
-
-        x0 = x0.float().to(self.device)
-        y0 = y0.float().to(self.device)
-        x_c = x0[:, :-self.s_length]
-
-        x0_output, xc_output = self.net(x0, x_c)
-
-        x0_output, xc_output = F.normalize(x0_output), F.normalize(xc_output)
-
-        logits_anomaly = self.criterion(x0_output, xc_output)  # .squeeze()
-
-        probs_anomaly = torch.sigmoid(logits_anomaly)
-        # Calculate Loss
-        loss = torch.nn.BCELoss(reduction='none')(probs_anomaly, y0)
-        loss = loss[:size]
-        return y0[:size], loss
+        s = criterion(x_output, xc_output)
+        loss = torch.sigmoid(s)
+        return x_output, loss
 
     def training_prepare(self, X, y):
         self.train_loader = DataLoader(X, batch_size=self.batch_size, shuffle=True, drop_last=False)

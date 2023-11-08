@@ -32,9 +32,9 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='UCR_natural_fault,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut',
-                    help='ASD,DASADS,PUMP,UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,SMD,MSL,SMAP,SWaT_cut,'
-                         'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat,UCR_natural_insect,UCR_natural_mars',
+                    default='UCR_natural_mars',
+                    help='ASD,DASADS,PUMP,SMD,MSL,SMAP,SWaT_cut,'
+                         'UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat,UCR_natural_insect,UCR_natural_mars',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     )
@@ -44,7 +44,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='TranAD',
+parser.add_argument("--model", type=str, default='NeuTraLTS',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 
@@ -116,6 +116,7 @@ def main():
 
         entity_metric_lst = []
         entity_metric_std_lst = []
+        entity_t_lst = []
         for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
             # train_data, train_labels = insert_pollution(train_data, test_data, labels, args.rate, args.seq_len)
             # train_data, train_labels, test_data, labels = insert_pollution_new(test_data, labels, args.rate)
@@ -136,7 +137,7 @@ def main():
                 print(f'\ninsert outlier [{args.insert_outlier}] with pollution rate [{args.rate}]')
 
                 t1 = time.time()
-                clf = model_class(**model_configs, random_state=42+i)
+                clf = model_class(**model_configs, random_state=83+i)
                 clf.sample_selection = args.sample_selection
                 if args.sample_selection != 8:
                     # clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
@@ -184,19 +185,42 @@ def main():
                         Arxiv17_df = pd.DataFrame.from_dict(clf.Arxiv17, orient='index').transpose()
                         Arxiv17_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(args.rate*args.insert_outlier) + str(i)+'.csv', index=False)
 
-            avg_entry = np.average(np.array(entries), axis=0)
-            std_entry = np.std(np.array(entries), axis=0)
+                avg_entry = np.average(np.array(entries), axis=0)
+                std_entry = np.std(np.array(entries), axis=0)
+                avg_t = np.average(t_lst)
 
-            entity_metric_lst.append(avg_entry)
-            entity_metric_std_lst.append(std_entry)
+                entity_metric_lst.append(avg_entry)
+                entity_metric_std_lst.append(std_entry)
+                entity_t_lst.append(avg_t)
+
+            if 'UCR' not in dataset_name:
+                txt = '%s, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, ' \
+                      '%.4f, %.4f, %.4f, %.4f, %.1f, %s, %f ' % \
+                      (dataset_name,
+                       avg_entry[0], std_entry[0], avg_entry[1], std_entry[1],
+                       avg_entry[2], std_entry[2], avg_entry[3], std_entry[3],
+                       avg_entry[4], std_entry[4],
+                       avg_t, args.model+'-'+funcs[args.sample_selection]+str(args.insert_outlier*args.rate), model_configs['lr'])
+                print(txt)
+
+                if not args.silent_header:
+                    f = open(result_file, 'a')
+                    print(txt, file=f)
+                    f.close()
+
+        if 'UCR' in dataset:
+            entity_avg_mean = np.average(np.array(entity_metric_lst), axis=0)
+            entity_std_mean = np.average(np.array(entity_metric_std_lst), axis=0)
 
             txt = '%s, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, ' \
-                  '%.4f, %.4f, %.4f, %.4f, %.1f, %s ' % \
-                  (dataset_name,
-                   avg_entry[0], std_entry[0], avg_entry[1], std_entry[1],
-                   avg_entry[2], std_entry[2], avg_entry[3], std_entry[3],
-                   avg_entry[4], std_entry[4],
-                   np.average(t_lst), args.model+'-'+funcs[args.sample_selection]+str(args.insert_outlier*args.rate))
+                  '%.4f, %.4f, %.4f, %.4f, %.1f, %s, %f ' % \
+                  (dataset,
+                   entity_avg_mean[0], entity_std_mean[0], entity_avg_mean[1], entity_std_mean[1],
+                   entity_avg_mean[2], entity_std_mean[2], entity_avg_mean[3], entity_std_mean[3],
+                   entity_avg_mean[4], entity_std_mean[4],
+                   np.average(entity_t_lst),
+                   args.model + '-' + funcs[args.sample_selection] + str(args.insert_outlier * args.rate),
+                   model_configs['lr'])
             print(txt)
 
             if not args.silent_header:
@@ -214,15 +238,23 @@ def count_datasets(dname, entities, combine):
                                                combine=combine)
         train_lst, test_lst, label_lst, name_lst = data_pkg
 
+        Ntrain = []
+        Ntest = []
+        Otest = []
+        Feature = []
         for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
-            Ntrain = len(train_data)
-            Ntest = len(test_data)
-            Otest = sum(labels)
-            print('%s,%d,%d,%d' % (dataset_name, Ntrain, Ntest, Otest))
+            Ntrain.append(len(train_data))
+            Ntest.append(len(test_data))
+            Otest.append(sum(labels))
+            Feature.append(len(train_data[0]))
+            if combine == 1:
+                print('%s,%d,%d,%d,%d' % (dataset, len(train_data), len(test_data), sum(labels), len(train_data[0])))
+        if combine == 0:
+            print('%s,%d,%d,%d,%d' % (dataset, np.average(Ntrain), np.average(Ntest), np.average(Otest), np.average(Feature)))
 
 
 if __name__ == '__main__':
-    # print("dataset_name,Ntrain,Ntest,Otest")
+    # print("dataset_name,|N-train|,|N-test|,|O-test|,|Feature|")
     # dname = 'ASD,DASADS,PUMP,SMD,MSL,SMAP,SWaT_cut'
     # dname_mean = 'UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2'
     # count_datasets(dname, 'FULL', 1)
