@@ -34,7 +34,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
 parser.add_argument("--dataset", type=str,
                     default='UCR_natural_mars',
                     help='ASD,DASADS,PUMP,SMD,MSL,SMAP,SWaT_cut,'
-                         'UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat,UCR_natural_insect,UCR_natural_mars',
+                         'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     )
@@ -44,7 +44,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='NeuTraLTS',
+parser.add_argument("--model", type=str, default='NCAD',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 
@@ -128,9 +128,10 @@ def main():
 
             entries = []
             t_lst = []
-            lr, epoch = get_lr(dataset_name, args.model, args.insert_outlier, model_configs['lr'], model_configs['epochs'])
+            lr, epoch, a = get_lr(dataset_name, args.model, args.insert_outlier, model_configs['lr'], model_configs['epochs'])
             model_configs['lr'] = lr
             model_configs['epochs'] = epoch
+            model_configs['a'] = a
             print(f'Model Configs: {model_configs}')
             for i in range(args.runs):
                 print(f'\nRunning [{i+1}/{args.runs}] of [{args.model}] [{funcs[args.sample_selection]}] on Dataset [{dataset_name}]')
@@ -185,13 +186,13 @@ def main():
                         Arxiv17_df = pd.DataFrame.from_dict(clf.Arxiv17, orient='index').transpose()
                         Arxiv17_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(args.rate*args.insert_outlier) + str(i)+'.csv', index=False)
 
-                avg_entry = np.average(np.array(entries), axis=0)
-                std_entry = np.std(np.array(entries), axis=0)
-                avg_t = np.average(t_lst)
+            avg_entry = np.average(np.array(entries), axis=0)
+            std_entry = np.std(np.array(entries), axis=0)
+            avg_t = np.average(t_lst)
 
-                entity_metric_lst.append(avg_entry)
-                entity_metric_std_lst.append(std_entry)
-                entity_t_lst.append(avg_t)
+            entity_metric_lst.append(avg_entry)
+            entity_metric_std_lst.append(std_entry)
+            entity_t_lst.append(avg_t)
 
             if 'UCR' not in dataset_name:
                 txt = '%s, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, ' \
@@ -253,11 +254,58 @@ def count_datasets(dname, entities, combine):
             print('%s,%d,%d,%d,%d' % (dataset, np.average(Ntrain), np.average(Ntest), np.average(Otest), np.average(Feature)))
 
 
-if __name__ == '__main__':
-    # print("dataset_name,|N-train|,|N-test|,|O-test|,|Feature|")
-    # dname = 'ASD,DASADS,PUMP,SMD,MSL,SMAP,SWaT_cut'
-    # dname_mean = 'UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2'
-    # count_datasets(dname, 'FULL', 1)
-    # count_datasets(dname_mean, 'FULL', 0)
+def print_dataset():
+    print("dataset_name,|N-train|,|N-test|,|O-test|,|Feature|")
+    dname = 'ASD,DASADS,PUMP,SMD,MSL,SMAP,SWaT_cut'
+    dname_mean = 'UCR_natural_heart_vbeat,UCR_natural_heart_vbeat2,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat,UCR_natural_insect,UCR_natural_mars'
+    count_datasets(dname, 'FULL', 1)
+    count_datasets(dname_mean, 'FULL', 0)
 
+
+def print_Nused():
+    import glob
+    # dname = 'SMD,MSL,SMAP'
+    # # dname = 'ASD,DASADS,SMD,MSL,SMAP,SWaT_cut'
+    # dataset_name_lst = dname.split(',')
+    # func = 'NCAD'
+    # for d in dataset_name_lst:
+    #     length = []
+    #     for i in range(5):
+    #         path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s_combined_myfunc0.0%d.csv' % (func, d, i)
+    #         # /home/xuhz/zry/DeepOD-new/@trainsets/NCAD./SMD_combined_myfunc0.00.csv
+    #         df = pd.read_csv(path)['dis10'].values
+    #         length.append(len(df))
+    #     print('%s,%s,%d' % (func, d, np.average(length)))
+    #
+    # dname = 'SWaT_cut'
+    # # dname = 'SWaT_cut,PUMP'
+    # dataset_name_lst = dname.split(',')
+    # func = 'NCAD'
+    # for d in dataset_name_lst:
+    #     length = []
+    #     for i in range(5):
+    #         path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s_myfunc0.0%d.csv' % (func, d, i)
+    #         # /home/xuhz/zry/DeepOD-new/@trainsets/NCAD./SMD_combined_myfunc0.00.csv
+    #         df = pd.read_csv(path)['dis10'].values
+    #         length.append(len(df))
+    #     print('%s,%s,%d' % (func, d, np.average(length)))
+
+    dname = 'UCR_natural_heart_vbeat,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat,UCR_natural_insect'
+    dataset_name_lst = dname.split(',')
+    func = 'NCAD'
+    for data in dataset_name_lst:
+        machine_lst = os.listdir(dataset_root + data + '/')
+        length = []
+        for m in machine_lst:
+            for i in range(5):
+                path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s-%s_myfunc0%d.csv' % (func, data, m, i)
+                # /home/xuhz/zry/DeepOD-new/@trainsets/NCAD./SMD_combined_myfunc0.00.csv
+                df = pd.read_csv(path)['dis10'].values
+                length.append(len(df))
+        print('%s,%s,%d' % (func, data, np.average(length)))
+
+
+if __name__ == '__main__':
+    # print_Nused()
+    # print_dataset()
     main()

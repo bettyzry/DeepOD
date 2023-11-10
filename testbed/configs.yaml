@@ -51,12 +51,14 @@ TcnED:
   kernel_size: 2
   rep_dim: 8
   hidden_dims: '8,8'
+  a: 0.5
 
 TranAD:
   lr: 0.000001
   epochs: 50
   batch_size: 64
   epoch_steps: -1
+  a: 0.5
 
 AnomalyTransformer:
   lr: 0.0001
@@ -91,12 +93,14 @@ NCAD:
   epochs: 20
   batch_size: 128
   lr: 0.0000002
+  a: 0.5
 
 
 NeuTraLTS:
   epochs: 50
   batch_size: 64
   lr: 0.001
+  a: 0.5
 
 
 LSTMED:

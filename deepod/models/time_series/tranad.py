@@ -13,12 +13,12 @@ from deepod.metrics import ts_metrics, point_adjustment
 class TranAD(BaseDeepAD):
     def __init__(self, seq_len=100, stride=1, lr=0.001, epochs=5, batch_size=128,
                  epoch_steps=20, prt_steps=1, device='cuda',
-                 verbose=2, random_state=42):
+                 verbose=2, random_state=42, a=0.5):
         super(TranAD, self).__init__(
             model_name='TranAD', data_type='ts', epochs=epochs, batch_size=batch_size, lr=lr,
             seq_len=seq_len, stride=stride,
             epoch_steps=epoch_steps, prt_steps=prt_steps, device=device,
-            verbose=verbose, random_state=random_state
+            verbose=verbose, random_state=random_state, a=a
         )
         self.net = None
         self.optimizer = None

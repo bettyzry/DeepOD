@@ -185,6 +185,7 @@ class BaseDeepAD(metaclass=ABCMeta):
         self.valid_loader = None
         self.early_stopping = EarlyStopping(patience=3, min_delta=0.001)
         self.ss_epoch = 10
+        self.drop_last = False
         return
 
     def Early_stopping(self):
@@ -223,7 +224,7 @@ class BaseDeepAD(metaclass=ABCMeta):
 
         self.train_data = X_seqs
         self.train_label = y_seqs
-        self.valid_loader = DataLoader(valid_seqs, batch_size=self.batch_size, shuffle=True, drop_last=False)
+        self.valid_loader = DataLoader(valid_seqs, batch_size=self.batch_size, shuffle=True, drop_last=self.drop_last)
         self.n_samples, self.n_features = X_seqs.shape[0], X_seqs.shape[2]
         if self.train_label is not None:
             self.trainsets['yseq0'] = self.train_label
@@ -589,6 +590,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.train_loss_past = self.train_loss_now
                 return
 
+            self.train_loss_past = self.train_loss_past[:len(self.train_loss_now)]
             save_num = max(int(self.save_rate * len(self.train_data)), int(self.n_samples*0.3))
             if epoch == 0:
                 index1 = np.array([])
@@ -603,7 +605,7 @@ class BaseDeepAD(metaclass=ABCMeta):
 
             self.train_data = self.train_data[np.sort(index)]
             self.train_loss_past = self.train_loss_now[np.sort(index)]
-            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
+            self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=self.drop_last,
                                       shuffle=True, pin_memory=True)
 
             self.trainsets['dis' + str(epoch)] = train_loss_now
@@ -724,7 +726,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.seq_starts = np.sort(self.seq_starts)
                 self.seq_starts = np.unique(self.seq_starts, axis=0)
                 self.train_data = np.array([self.ori_data[i:i + self.seq_len] for i in self.seq_starts])  # 添加划分的数据
-                self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=False,
+                self.train_loader = DataLoader(self.train_data, batch_size=self.batch_size, drop_last=self.drop_last,
                                                shuffle=True, pin_memory=True)
                 self.n_samples = len(self.train_data)
 

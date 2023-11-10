@@ -95,12 +95,12 @@ class NCAD(BaseDeepAD):
                  hidden_dims='150,150,150', act='ReLU', bias=False,
                  kernel_size=7, train_val_pc=0.25, dropout=0.0,
                  epoch_steps=-1, prt_steps=10, device='cuda',
-                 verbose=2, random_state=42):
+                 verbose=2, random_state=42, a=0.5):
         super(NCAD, self).__init__(
             model_name='NCAD', data_type='ts', epochs=epochs, batch_size=batch_size, lr=lr,
             seq_len=seq_len, stride=stride,
             epoch_steps=epoch_steps, prt_steps=prt_steps, device=device,
-            verbose=verbose, random_state=random_state
+            verbose=verbose, random_state=random_state, a=a
         )
 
         self.s_length = s_length
@@ -116,6 +116,7 @@ class NCAD(BaseDeepAD):
 
         self.kernel_size = kernel_size
 
+        self.drop_last = True
         return
 
     def fit(self, X, y=None, Xtest=None, Ytest=None, X_seqs=None, y_seqs=None):
@@ -161,7 +162,7 @@ class NCAD(BaseDeepAD):
     def training(self, epoch):
         self.net.train()
         loss_lst = []
-        for x0 in self.train_loader:
+        for ii, x0 in enumerate(self.train_loader):
             y0 = np.zeros(x0.shape[0])
             y0 = torch.tensor(y0)
             if self.coe_rate > 0:
@@ -292,7 +293,7 @@ def coe_batch(x: torch.Tensor, y: torch.Tensor, coe_rate: float, suspect_window_
             if False, the whole suspect segment is randomly permuted.
     """
 
-    if coe_rate == 0:
+    if coe_rate == 0:       # 1.5
         raise ValueError(f"coe_rate must be > 0.")
     batch_size = x.shape[0]
     ts_channels = x.shape[1]

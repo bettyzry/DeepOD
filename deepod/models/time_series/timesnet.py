@@ -15,12 +15,12 @@ class TimesNet(BaseDeepAD):
     def __init__(self, seq_len=100, stride=1, lr=0.0001, epochs=10, batch_size=32,
                  epoch_steps=20, prt_steps=1, device='cuda',
                  pred_len=0, e_layers=2, d_model=64, d_ff=64, dropout=0.1, top_k=5, num_kernels=6,
-                 verbose=2, random_state=42):
+                 verbose=2, random_state=42, a=0.5):
         super(TimesNet, self).__init__(
             model_name='TimesNet', data_type='ts', epochs=epochs, batch_size=batch_size, lr=lr,
             seq_len=seq_len, stride=stride,
             epoch_steps=epoch_steps, prt_steps=prt_steps, device=device,
-            verbose=verbose, random_state=random_state
+            verbose=verbose, random_state=random_state, a=a
         )
         self.pred_len = pred_len
         self.e_layers = e_layers

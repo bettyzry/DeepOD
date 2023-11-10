@@ -15,12 +15,12 @@ class TcnED(BaseDeepAD):
     def __init__(self, seq_len=100, stride=1, epochs=10, batch_size=32, lr=1e-4,
                  rep_dim=32, hidden_dims=32, kernel_size=3, act='LeakyReLU', bias=False, dropout=0.2,
                  epoch_steps=-1, prt_steps=10, device='cuda',
-                 verbose=2, random_state=42):
+                 verbose=2, random_state=42, a=0.5):
         super(TcnED, self).__init__(
             model_name='TcnED', data_type='ts', epochs=epochs, batch_size=batch_size, lr=lr,
             seq_len=seq_len, stride=stride,
             epoch_steps=epoch_steps, prt_steps=prt_steps, device=device,
-            verbose=verbose, random_state=random_state
+            verbose=verbose, random_state=random_state, a=a
         )
 
         self.hidden_dims = hidden_dims

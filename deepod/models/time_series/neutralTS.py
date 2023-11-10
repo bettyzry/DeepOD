@@ -26,7 +26,7 @@ class NeuTraLTS(BaseDeepAD):
                  hidden_dims='100,50', trans_hidden_dims=50,
                  act='LeakyReLU', bias=False, train_val_pc=0.25, dropout=0.0,
                  epoch_steps=-1, prt_steps=10, device='cuda',
-                 verbose=1, random_state=42, a=0.2, rate=0.1):
+                 verbose=1, random_state=42, a=0.5, rate=0.1):
         super(NeuTraLTS, self).__init__(
             model_name='NeuTraL', data_type='ts', epochs=epochs, batch_size=batch_size, lr=lr,
             epoch_steps=epoch_steps, prt_steps=prt_steps, device=device,

@@ -12,6 +12,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 # --------------------------- data preprocessing --------------------------- #
 
 def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
+    a = 0.5
     lr = ori_lr
     epoch = ori_epoch
     if model_name == 'NCAD':
@@ -22,19 +23,25 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
             lr = 0.0000002
         elif 'heart_vbeat-' in dataset_name:
             lr = 0.00000002
-        elif 'SMAP' in dataset_name:    # 有问题
-            lr = 0.0000000002
-        elif 'fault' in dataset_name or 'sbeat' in dataset_name or 'insect' in dataset_name or 'mars' in dataset_name:
+        elif 'heart_vbeat2-' in dataset_name:
+            lr = 0.0000002
+        elif 'fault-' in dataset_name or 'gait-' in dataset_name:
+            lr = 0.002
+        elif 'sbeat-' in dataset_name or 'insect-' in dataset_name or 'mars-' in dataset_name:
             # 有问题
-            lr = 0.0000000002
+            lr = 0.00002
+
+        elif 'SMAP' in dataset_name:    # 有问题
+            lr = 0.00002
 
     if model_name == 'NeuTraLTS':
         lr = 0.001
-        if 'gait' in dataset_name:
+        if 'gait-' in dataset_name or 'fault-' in dataset_name:
             lr = 0.001
-        elif 'heart_vbeat2' in dataset_name or 'fault' in dataset_name or 'heart_vbeat-' in dataset_name\
-                or 'insect' in dataset_name or 'mars' in dataset_name:
-            lr = 0.00001     # 未定
+        elif 'heart_sbeat-' in dataset_name:
+            lr = 0.000001
+        elif 'heart_vbeat-' in dataset_name or 'insect-' in dataset_name:
+            lr = 0.0001     # 不太好
         elif 'SWaT' in dataset_name:
             lr = 0.0001
         elif 'ASD' in dataset_name:
@@ -45,15 +52,17 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
 
     if model_name == 'TranAD':
         lr = 0.000001
-        if 'mars' in dataset_name:
+        if 'mars-' in dataset_name:
             lr = 0.0001
         elif 'MSL' in dataset_name:
             lr = 0.0001
         elif 'SMAP' in dataset_name:
             lr = 0.000001
-        elif 'fault' in dataset_name or 'gait' in dataset_name or 'heart_sbeat' in dataset_name or 'heart_vbeat-' in dataset_name\
-            or 'heart_vbeat2' in dataset_name or 'insect' in dataset_name:
-            lr = 0.00001
+        elif 'gait-' in dataset_name or 'heart_sbeat-' in dataset_name or 'heart_vbeat-' in dataset_name\
+            or 'heart_vbeat2-' in dataset_name or 'insect-' in dataset_name:
+            lr = 0.0001
+        elif 'fault-' in dataset_name:
+            lr = 0.00001    # 未定
 
     if model_name == 'TcnED':
         lr = 0.00015
@@ -61,20 +70,23 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
             if 'ASD' in dataset_name:
                 lr = 0.0015
         else:   # 正常处理
-            if 'heart_sbeat' in dataset_name:
+            if 'heart_sbeat-' in dataset_name:
                 lr = 0.00015
-            elif 'fault' in dataset_name:
+            elif 'fault-' in dataset_name:
                 lr = 0.0015
-            elif 'heart_vbeat-' in dataset_name or 'heart_vbeat2' in dataset_name or 'insect' in dataset_name \
-                    or 'mars' in dataset_name or 'gait' in dataset_name:
-                lr = 0.015     # 未定
+            elif 'insect-' in dataset_name:
+                lr = 0.05
+            elif 'gait-' in dataset_name:
+                lr = 0.05
+            elif 'heart_vbeat-' in dataset_name:
+                lr = 0.01
 
             elif 'ASD' in dataset_name or 'DASADS' in dataset_name or 'MSL' in dataset_name \
                     or 'PUMP' in dataset_name or 'SMD' in dataset_name:
                 lr = 0.00015
             elif 'SMAP' in dataset_name or 'SWaT' in dataset_name:
                 lr = 0.0015
-    return lr, epoch
+    return lr, epoch, a
 
 
 def data_standardize(X_train, X_test, remove=False, verbose=False, max_clip=5, min_clip=-4):
