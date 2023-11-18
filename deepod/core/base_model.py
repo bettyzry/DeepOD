@@ -27,7 +27,7 @@ from sklearn.preprocessing import normalize
 import torch.nn.functional as F
 from sklearn.ensemble import IsolationForest
 from deepod.core.EarlyStopping import EarlyStopping
-from deepod.metrics import ts_metrics, point_adjustment
+from deepod.metrics import ts_metrics, point_adjustment, DC_metrics
 
 
 class BaseDeepAD(metaclass=ABCMeta):
@@ -263,6 +263,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             if Xtest is not None and Ytest is not None:
                 self.net.eval()
                 scores = self.decision_function(Xtest)
+                # DC_metrics(Ytest, scores)
                 eval_metrics = ts_metrics(Ytest, scores)
                 adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
                 result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
@@ -689,7 +690,7 @@ class BaseDeepAD(metaclass=ABCMeta):
                 self.a = 1 - 1/(epoch+2)
                 reward['0'] = self.a * (1 - dis) + (1 - self.a) * losses
                 reward['1'] = self.a * (1 - dis) + (1 - self.a) * (1 - losses)
-                reward['2'] = self.a * dis + (1 - self.a) * 0.5
+                reward['2'] = self.a * dis + (1 - self.a) * losses
 
                 actions = np.argmax(reward.values, axis=1)
 

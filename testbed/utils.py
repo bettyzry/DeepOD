@@ -27,12 +27,18 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
             lr = 0.0000002
         elif 'fault-' in dataset_name or 'gait-' in dataset_name:
             lr = 0.002
-        elif 'sbeat-' in dataset_name or 'insect-' in dataset_name or 'mars-' in dataset_name:
-            # 有问题
+        elif 'sbeat-' in dataset_name:
+            lr = 0.00002
+        elif 'insect-' in dataset_name or 'mars-' in dataset_name:
+            lr = 0.00002
+        elif 'MSL' in dataset_name:
+            lr = 0.0000002
+
+        elif 'SMAP' in dataset_name:
             lr = 0.00002
 
-        elif 'SMAP' in dataset_name:    # 有问题
-            lr = 0.00002
+        elif 'SWaT_cut' in dataset_name:    # 有问题
+            lr = 0.0002
 
     if model_name == 'NeuTraLTS':
         lr = 0.001
@@ -48,21 +54,31 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
             lr = 0.001
         elif 'PUMP' in dataset_name:
             lr = 0.001
-            epoch = 20
+        elif 'MSL' in dataset_name or 'SMAP' in dataset_name:
+            lr = 0.0001
+
+        elif 'SMD' in dataset_name or 'DASADS' in dataset_name:
+            lr = 0.01  # ?
 
     if model_name == 'TranAD':
         lr = 0.000001
         if 'mars-' in dataset_name:
             lr = 0.0001
-        elif 'MSL' in dataset_name:
-            lr = 0.0001
-        elif 'SMAP' in dataset_name:
-            lr = 0.000001
         elif 'gait-' in dataset_name or 'heart_sbeat-' in dataset_name or 'heart_vbeat-' in dataset_name\
             or 'heart_vbeat2-' in dataset_name or 'insect-' in dataset_name:
             lr = 0.0001
         elif 'fault-' in dataset_name:
             lr = 0.00001    # 未定
+
+        elif 'ASD' in dataset_name or 'DASADS' in dataset_name or 'PUMP' in dataset_name:
+            lr = 0.0001
+
+        elif 'MSL' in dataset_name:
+            lr = 0.00001
+        elif 'SMAP' in dataset_name:
+            lr = 0.00001
+        elif 'SMD' in dataset_name:
+            lr = 0.0001
 
     if model_name == 'TcnED':
         lr = 0.00015
@@ -80,16 +96,23 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
                 lr = 0.05
             elif 'heart_vbeat-' in dataset_name:
                 lr = 0.01
-
-            elif 'ASD' in dataset_name or 'DASADS' in dataset_name or 'MSL' in dataset_name \
-                    or 'PUMP' in dataset_name or 'SMD' in dataset_name:
+            elif 'ASD' in dataset_name or 'DASADS' in dataset_name \
+                    or 'PUMP' in dataset_name:
                 lr = 0.00015
-            elif 'SMAP' in dataset_name or 'SWaT' in dataset_name:
+            elif 'SMAP' in dataset_name:
+                lr = 0.015
+            elif 'SMD' in dataset_name:
+                lr = 0.00015
+
+            elif 'MSL' in dataset_name:
                 lr = 0.0015
+            elif 'SWaT' in dataset_name:
+                lr = 0.0015
+
     return lr, epoch, a
 
 
-def data_standardize(X_train, X_test, remove=False, verbose=False, max_clip=5, min_clip=-4):
+def data_standardize_xhz(X_train, X_test, remove=False, verbose=False, max_clip=5, min_clip=-4):
     mini, maxi = X_train.min(), X_train.max()
     for col in X_train.columns:
         if maxi[col] != mini[col]:
@@ -116,6 +139,22 @@ def data_standardize(X_train, X_test, remove=False, verbose=False, max_clip=5, m
     X_train = X_train.values
     X_test = X_test.values
 
+    return X_train, X_test
+
+
+def data_standardize(X_train, X_test, remove=False, verbose=False, max_clip=5, min_clip=-4):
+    mini, maxi = np.min(X_train, axis=0), np.max(X_train, axis=0)
+    feature = X_train.shape[1]
+
+    for col in range(feature):
+        if maxi[col] != mini[col]:
+            X_train[:, col] = (X_train[:, col] - mini[col]) / (maxi[col] - mini[col])
+            X_test[:, col] = (X_test[:, col] - mini[col]) / (maxi[col] - mini[col])
+            X_test[:, col] = np.clip(X_test[:, col], a_min=min_clip, a_max=max_clip)
+        else:
+            if mini[col] != 0:
+                X_train[:, col] = X_train[:, col] / mini[col]  # Redundant operation, just for consistency
+                X_test[:, col] = X_test[:, col] / mini[col]
     return X_train, X_test
 
 
@@ -170,7 +209,6 @@ def import_data(file):
         x = df.values[:, :-1]
         y = np.array(df.values[:, -1], dtype=int)
     return x, y
-
 
 
 def read_data(file, split='50%-normal', normalization='z-score', seed=42):
@@ -249,65 +287,85 @@ def read_data(file, split='50%-normal', normalization='z-score', seed=42):
     return x_train, y_train, x_test, y_test
 
 
-def import_ts_data_unsupervised(data_root, data, entities=None, combine=False):
-    if data[:3] == 'UCR':
-        combine = False
+def import_ts_data_unsupervised(data_root1, data_root2, data, entities=None, combine=False):
+    if data in ['MSL', 'SMAP', 'SMD']:
+        train = np.load(os.path.join(data_root2, data, data + '_train.npy'))
+        label = np.load(os.path.join(data_root2, data, data + '_test_label.npy'))
+        test = np.load(os.path.join(data_root2, data, data + '_test.npy'))
+
+        train, test = data_standardize(train, test)
+        train_lst = [train]
+        test_lst = [test]
+        label_lst = [label]
+        name_lst = [data]
     else:
-        combine = True
+        if data[:3] == 'UCR':
+            combine = False
+        else:
+            combine = combine
 
-    if type(entities) == str:
-        entities_lst = entities.split(',')
-    elif type(entities) == list:
-        entities_lst = entities
-    else:
-        raise ValueError('wrong entities')
+        if type(entities) == str:
+            entities_lst = entities.split(',')
+        elif type(entities) == list:
+            entities_lst = entities
+        else:
+            raise ValueError('wrong entities')
 
-    name_lst = []
-    train_lst = []
-    test_lst = []
-    label_lst = []
+        name_lst = []
+        train_lst = []
+        test_lst = []
+        label_lst = []
 
-    if len(glob.glob(os.path.join(data_root, data) + '/*.csv')) == 0:
-        machine_lst = os.listdir(data_root + data + '/')
-        for m in sorted(machine_lst):
-            if entities != 'FULL' and m not in entities_lst:
-                continue
-            train_path = glob.glob(os.path.join(data_root, data, m, '*train*.csv'))
-            test_path = glob.glob(os.path.join(data_root, data, m, '*test*.csv'))
+        if len(glob.glob(os.path.join(data_root1, data) + '/*.csv')) == 0:
+            machine_lst = os.listdir(data_root1 + data + '/')
+            for m in sorted(machine_lst):
+                if entities != 'FULL' and m not in entities_lst:
+                    continue
+                train_path = glob.glob(os.path.join(data_root1, data, m, '*train*.csv'))
+                test_path = glob.glob(os.path.join(data_root1, data, m, '*test*.csv'))
 
-            assert len(train_path) == 1 and len(test_path) == 1, f'{m}'
-            train_path, test_path = train_path[0], test_path[0]
+                assert len(train_path) == 1 and len(test_path) == 1, f'{m}'
+                train_path, test_path = train_path[0], test_path[0]
 
-            train_df = pd.read_csv(train_path, sep=',', index_col=0)
-            test_df = pd.read_csv(test_path, sep=',', index_col=0)
+                train_df = pd.read_csv(train_path, sep=',', index_col=0)
+                test_df = pd.read_csv(test_path, sep=',', index_col=0)
+                labels = test_df['label'].values
+                train_df, test_df = train_df.drop('label', axis=1), test_df.drop('label', axis=1)
+
+                # normalization
+                train, test = train_df.values, test_df.values
+                train, test = data_standardize(train, test)
+                # train, test = train_df.values, test_df.values
+
+                train_lst.append(train)
+                test_lst.append(test)
+                label_lst.append(labels)
+                name_lst.append(data+'-'+m)
+
+            if combine:
+                train_lst = [np.concatenate(train_lst)]
+                test_lst = [np.concatenate(test_lst)]
+                label_lst = [np.concatenate(label_lst)]
+                name_lst = [data + '_combined']
+
+        else:
+            train_df = pd.read_csv(f'{data_root1}{data}/{data}_train.csv', sep=',', index_col=0)
+            test_df = pd.read_csv(f'{data_root1}{data}/{data}_test.csv', sep=',', index_col=0)
             labels = test_df['label'].values
             train_df, test_df = train_df.drop('label', axis=1), test_df.drop('label', axis=1)
-
-            # normalization
-            train, test = data_standardize(train_df, test_df)
+            train, test = train_df.values, test_df.values
+            train, test = data_standardize(train, test)
 
             train_lst.append(train)
             test_lst.append(test)
             label_lst.append(labels)
-            name_lst.append(data+'-'+m)
+            name_lst.append(data)
 
-        if combine:
-            train_lst = [np.concatenate(train_lst)]
-            test_lst = [np.concatenate(test_lst)]
-            label_lst = [np.concatenate(label_lst)]
-            name_lst = [data + '_combined']
-
-    else:
-        train_df = pd.read_csv(f'{data_root}{data}/{data}_train.csv', sep=',', index_col=0)
-        test_df = pd.read_csv(f'{data_root}{data}/{data}_test.csv', sep=',', index_col=0)
-        labels = test_df['label'].values
-        train_df, test_df = train_df.drop('label', axis=1), test_df.drop('label', axis=1)
-        train, test = data_standardize(train_df, test_df)
-
-        train_lst.append(train)
-        test_lst.append(test)
-        label_lst.append(labels)
-        name_lst.append(data)
+        # for ii, train in enumerate(train_lst):
+        #     test = test_lst[ii]
+        #     train, test = data_standardize(train, test)
+        #     train_lst[ii] = train
+        #     test_lst[ii] = test
 
     return train_lst, test_lst, label_lst, name_lst
 

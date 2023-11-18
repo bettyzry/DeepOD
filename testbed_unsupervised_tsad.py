@@ -22,6 +22,7 @@ from sample_selection.ENV import ADEnv
 # from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution
 
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
+dataset_root_DC = f'/home/{getpass.getuser()}/dataset/5-TSdata/_DCDetector/'
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--runs", type=int, default=5,
@@ -32,19 +33,19 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='UCR_natural_mars',
-                    help='ASD,DASADS,PUMP,SMD,MSL,SMAP,SWaT_cut,'
+                    default='PUMP',
+                    help='ASD,MSL,SMAP,SMD,SWaT_cut,PUMP,DASADS,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat'
                          'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
                     #      'UCR_natural_heart_vbeat,UCR_natural_heart_sbeat,UCR_natural_gait,UCR_natural_fault'
                     )
 parser.add_argument("--entities", type=str,
-                    default='FULL',
+                    default='FULL',      # ['C-1', 'C-2', 'F-4']
                     help='FULL represents all the csv file in the folder, '
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='NCAD',
+parser.add_argument("--model", type=str, default='AnomalyTransformer',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
                     )
 
@@ -55,8 +56,8 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
-parser.add_argument('--insert_outlier', type=float, default=0)      # 0不插入异常，1插入异常
+parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
+parser.add_argument('--insert_outlier', type=int, default=0)      # 0不插入异常，1插入异常
 parser.add_argument('--rate', type=int, default=20)                # 异常数目
 args = parser.parse_args()
 
@@ -109,7 +110,12 @@ def main():
 
     for dataset in dataset_name_lst:
         # # import data
-        data_pkg = import_ts_data_unsupervised(dataset_root,
+        # if dataset in ['MSL', 'SMAP', 'SMD'] or 'UCR' in dataset:
+        #     model_configs['seq_len'] = 100
+        # else:
+        #     model_configs['seq_len'] = 30
+
+        data_pkg = import_ts_data_unsupervised(dataset_root, dataset_root_DC,
                                                      dataset, entities=args.entities,
                                                      combine=args.entity_combined)
         train_lst, test_lst, label_lst, name_lst = data_pkg
@@ -194,7 +200,7 @@ def main():
             entity_metric_std_lst.append(std_entry)
             entity_t_lst.append(avg_t)
 
-            if 'UCR' not in dataset_name:
+            if 'UCR' not in dataset_name or args.entity_combined == 1:
                 txt = '%s, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, ' \
                       '%.4f, %.4f, %.4f, %.4f, %.1f, %s, %f ' % \
                       (dataset_name,
@@ -209,7 +215,7 @@ def main():
                     print(txt, file=f)
                     f.close()
 
-        if 'UCR' in dataset:
+        if 'UCR' in dataset or args.entity_combined == 0:
             entity_avg_mean = np.average(np.array(entity_metric_lst), axis=0)
             entity_std_mean = np.average(np.array(entity_metric_std_lst), axis=0)
 
@@ -219,7 +225,7 @@ def main():
                    entity_avg_mean[0], entity_std_mean[0], entity_avg_mean[1], entity_std_mean[1],
                    entity_avg_mean[2], entity_std_mean[2], entity_avg_mean[3], entity_std_mean[3],
                    entity_avg_mean[4], entity_std_mean[4],
-                   np.average(entity_t_lst),
+                   np.sum(np.array(entity_t_lst)),
                    args.model + '-' + funcs[args.sample_selection] + str(args.insert_outlier * args.rate),
                    model_configs['lr'])
             print(txt)
@@ -231,6 +237,7 @@ def main():
 
 
 def count_datasets(dname, entities, combine):
+
     dataset_name_lst = dname.split(',')
     for dataset in dataset_name_lst:
         # # import data
@@ -264,45 +271,55 @@ def print_dataset():
 
 def print_Nused():
     import glob
-    # dname = 'SMD,MSL,SMAP'
-    # # dname = 'ASD,DASADS,SMD,MSL,SMAP,SWaT_cut'
-    # dataset_name_lst = dname.split(',')
-    # func = 'NCAD'
-    # for d in dataset_name_lst:
-    #     length = []
-    #     for i in range(5):
-    #         path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s_combined_myfunc0.0%d.csv' % (func, d, i)
-    #         # /home/xuhz/zry/DeepOD-new/@trainsets/NCAD./SMD_combined_myfunc0.00.csv
-    #         df = pd.read_csv(path)['dis10'].values
-    #         length.append(len(df))
-    #     print('%s,%s,%d' % (func, d, np.average(length)))
-    #
-    # dname = 'SWaT_cut'
-    # # dname = 'SWaT_cut,PUMP'
-    # dataset_name_lst = dname.split(',')
-    # func = 'NCAD'
-    # for d in dataset_name_lst:
-    #     length = []
-    #     for i in range(5):
-    #         path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s_myfunc0.0%d.csv' % (func, d, i)
-    #         # /home/xuhz/zry/DeepOD-new/@trainsets/NCAD./SMD_combined_myfunc0.00.csv
-    #         df = pd.read_csv(path)['dis10'].values
-    #         length.append(len(df))
-    #     print('%s,%s,%d' % (func, d, np.average(length)))
+    func = 'TcnED'
 
-    dname = 'UCR_natural_heart_vbeat,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat,UCR_natural_insect'
+    # dname = 'ASD,DASADS'              # 'NeuTraLTS'
+    # dname = 'ASD,MSL,SMAP,SMD'      # 'TcnED'
+    # dname = 'ASD,DASADS'  #   'NCAD'
+    # dname = 'ASD,DASADS,SMD,MSL,SMAP,SWaT_cut'
+    dname = 'DASADS'
     dataset_name_lst = dname.split(',')
-    func = 'NCAD'
-    for data in dataset_name_lst:
-        machine_lst = os.listdir(dataset_root + data + '/')
+    for d in dataset_name_lst:
         length = []
-        for m in machine_lst:
-            for i in range(5):
-                path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s-%s_myfunc0%d.csv' % (func, data, m, i)
-                # /home/xuhz/zry/DeepOD-new/@trainsets/NCAD./SMD_combined_myfunc0.00.csv
-                df = pd.read_csv(path)['dis10'].values
-                length.append(len(df))
-        print('%s,%s,%d' % (func, data, np.average(length)))
+        for i in range(5):
+            # path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s_combined_myfunc0.0%d.csv' % (func, d, i)
+            path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s_combined_myfunc0%d.csv' % (func, d, i)
+            # /home/xuhz/zry/DeepOD-new/@trainsets/NCAD./SMD_combined_myfunc0.00.csv
+            df = pd.read_csv(path)
+            column = df.columns[-1]
+            df = df[column].values
+            length.append(len(df))
+        print('%s,%s,%d' % (func, d, np.average(length)))
+
+    # dname = 'PUMP'      # NCAD
+    # dname = 'PUMP'      # NeuTraLTS
+    dname = 'SWaT_cut,PUMP'
+    dataset_name_lst = dname.split(',')
+    for d in dataset_name_lst:
+        length = []
+        for i in range(5):
+            # path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s_myfunc0.0%d.csv' % (func, d, i)
+            path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s_myfunc0%d.csv' % (func, d, i)
+            # /home/xuhz/zry/DeepOD-new/@trainsets/NCAD./SMD_combined_myfunc0.00.csv
+            df = pd.read_csv(path)
+            column = df.columns[-1]
+            df = df[column].values
+            length.append(len(df))
+        print('%s,%s,%d' % (func, d, np.average(length)))
+
+    # dname = 'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat'
+    # dataset_name_lst = dname.split(',')
+    # for data in dataset_name_lst:
+    #     machine_lst = os.listdir(dataset_root + data + '/')
+    #     length = []
+    #     for m in machine_lst:
+    #         for i in range(5):
+    #             # path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s-%s_myfunc0.0%d.csv' % (func, data, m, i)
+    #             path = '/home/xuhz/zry/DeepOD-new/@trainsets/%s./%s-%s_myfunc0%d.csv' % (func, data, m, i)
+    #             # /home/xuhz/zry/DeepOD-new/@trainsets/NCAD./SMD_combined_myfunc0.00.csv
+    #             df = pd.read_csv(path)['dis10'].values
+    #             length.append(len(df))
+    #     print('%s,%s,%d' % (func, data, np.average(length)))
 
 
 if __name__ == '__main__':
