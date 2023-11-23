@@ -20,7 +20,7 @@ class LSTMED(BaseDeepAD):
                  hidden_size=5, seq_len=30, stride=1, train_val_percentage=0.25, epoch_steps=-1,
                  n_layers=(1, 1), use_bias=(True, True), dropout=(0, 0), prt_steps=10, verbose=2,
                  random_state=None, device='cuda', gpu=0, patience=5,
-                 pca_comp=None, last_t_only=True, explained_var=None, set_hid_eq_pca=False):
+                 pca_comp=None, last_t_only=True, explained_var=None, set_hid_eq_pca=False, a=0.5):
         """
         If set_hid_eq_pca is True and one of pca_comp or explained_var is true, then hidden_size is ignored.
         Hidden size is set equal to number of pca components obtained.
@@ -29,7 +29,7 @@ class LSTMED(BaseDeepAD):
             model_name='TcnED', data_type='ts', epochs=epochs, batch_size=batch_size, lr=lr,
             seq_len=seq_len, stride=stride,
             epoch_steps=epoch_steps, prt_steps=prt_steps, device=device,
-            verbose=verbose, random_state=random_state
+            verbose=verbose, random_state=random_state, a=a
         )
 
         if set_hid_eq_pca:

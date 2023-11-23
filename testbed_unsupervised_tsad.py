@@ -33,7 +33,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='PUMP',
+                    default='ASD',
                     help='ASD,MSL,SMAP,SMD,SWaT_cut,PUMP,DASADS,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat'
                          'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
@@ -45,8 +45,8 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='AnomalyTransformer',
-                    help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer, DCdetector"
+parser.add_argument("--model", type=str, default='NCAD',
+                    help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer"
                     )
 
 parser.add_argument('--silent_header', type=bool, default=False)
@@ -57,8 +57,8 @@ parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
 parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
-parser.add_argument('--insert_outlier', type=int, default=0)      # 0不插入异常，1插入异常
-parser.add_argument('--rate', type=int, default=20)                # 异常数目
+parser.add_argument('--insert_outlier', type=int, default=1)      # 0不插入异常，1插入异常
+parser.add_argument('--rate', type=int, default=10)                # 异常数目
 args = parser.parse_args()
 
 # rate_list = [0, 0.01, 0.02, 0.1, 0.15, 0.2]
@@ -78,6 +78,92 @@ with open(path) as f:
         model_configs = {}
 model_configs['seq_len'] = args.seq_len
 model_configs['stride'] = args.stride
+
+
+def plot(xTest, yTest, xPred, adj_score, score):
+    if len(xPred) != len(xTest):
+        new_xPred = [i[0][0] for i in xPred[:-1]]
+        last = [i[0] for i in xPred[-1]]
+        new_xPred = np.concatenate([new_xPred, last])
+        xPred = new_xPred
+
+    xTest = [i[0] for i in xTest]
+
+    score = np.abs(xTest - xPred)
+
+    t = np.percentile(score, (1-sum(yTest)*2.5/len(yTest))*100)
+    index = np.where(score > t)[0]
+    adj_yPred = np.zeros(len(score))
+    adj_yPred[index] = 1
+
+    length = 5000
+    splits = np.where(yTest[1:] != yTest[:-1])[0] + 1
+    is_anomaly = yTest[0] == 1
+    timestamp = np.arange(len(xTest))
+    pos = 0
+    end = 0
+    # for sp in splits:
+    #     if is_anomaly:
+    #         if sp < end:
+    #             is_anomaly = not is_anomaly
+    #             pos = sp
+    #             continue
+    #         left = int((length - (sp - pos)) / 2)
+    #         start = max(0, pos - left)
+    #         end = min(len(yTest), sp + left)
+    #         xTest_plot = xTest[start:end]
+    #         xPred_plot = xPred[start:end]
+    #         yTest_plot = yTest[start:end]
+    #         yPred_plot = adj_yPred[start:end]
+    #         residual = score[start:end]
+    #         ts = timestamp[start:end]
+    #         plt.suptitle(args.model)
+    #
+    #         plt.subplot(511)
+    #         plt.plot(ts, xTest_plot)
+    #         plt.ylabel('xTest')
+    #
+    #         plt.subplot(512)
+    #         plt.plot(ts, xPred_plot)
+    #         plt.ylabel('xPred')
+    #
+    #         plt.subplot(513)
+    #         plt.plot(ts, residual)
+    #         plt.ylabel('residual')
+    #
+    #         plt.subplot(514)
+    #         plt.plot(ts, yTest_plot)
+    #         plt.ylabel('yTest')
+    #
+    #         plt.subplot(515)
+    #         plt.plot(ts, yPred_plot)
+    #         plt.ylabel('yPred')
+    #
+    #         plt.show()
+    #     is_anomaly = not is_anomaly
+    #     pos = sp
+
+    plt.suptitle(args.model+'-kpi12')
+    plt.subplot(511)
+    plt.plot(timestamp, xTest)
+    plt.ylabel('xTest')
+
+    plt.subplot(512)
+    plt.plot(timestamp, xPred)
+    plt.ylabel('xPred')
+
+    plt.subplot(513)
+    plt.plot(timestamp, score)
+    plt.ylabel('residual')
+
+    plt.subplot(514)
+    plt.plot(timestamp, yTest)
+    plt.ylabel('yTest')
+
+    plt.subplot(515)
+    plt.plot(timestamp, adj_yPred)
+    plt.ylabel('yPred')
+    plt.show()
 
 
 def main():
@@ -168,6 +254,7 @@ def main():
                 scores = clf.decision_function(test_data)
                 eval_metrics = ts_metrics(labels, scores)
                 adj_eval_metrics = ts_metrics(labels, point_adjustment(labels, scores))
+                # plot(test_data, labels, clf.xPred, point_adjustment(labels, scores), scores)
 
                 # print single results
                 txt = f'{dataset_name},'

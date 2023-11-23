@@ -19,8 +19,16 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         lr = 0.0000002
         if 'ASD' in dataset_name:
             lr = 0.000002
+
         elif 'DASADS' in dataset_name:
-            lr = 0.0000002
+            lr = 0.000002           # 0.0000002
+        elif 'PUMP' in dataset_name:
+            lr = 0.000002           # 0.0000002
+        elif 'SWaT' in dataset_name:
+            lr = 0.000002           # 0.0002
+        elif 'SMAP' in dataset_name:
+            lr = 0.000002
+
         elif 'heart_vbeat-' in dataset_name:
             lr = 0.00000002
         elif 'heart_vbeat2-' in dataset_name:
@@ -34,8 +42,6 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         elif 'MSL' in dataset_name:
             lr = 0.0000002
 
-        elif 'SMAP' in dataset_name:
-            lr = 0.00002
 
         elif 'SWaT_cut' in dataset_name:    # 有问题
             lr = 0.0002
@@ -56,9 +62,10 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
             lr = 0.001
         elif 'MSL' in dataset_name or 'SMAP' in dataset_name:
             lr = 0.0001
-
-        elif 'SMD' in dataset_name or 'DASADS' in dataset_name:
-            lr = 0.01  # ?
+        elif 'DASADS' in dataset_name:
+            lr = 0.0001
+        elif 'SMD' in dataset_name:
+            lr = 0.1  # ?
 
     if model_name == 'TranAD':
         lr = 0.000001
@@ -70,7 +77,7 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         elif 'fault-' in dataset_name:
             lr = 0.00001    # 未定
 
-        elif 'ASD' in dataset_name or 'DASADS' in dataset_name or 'PUMP' in dataset_name:
+        elif 'ASD' in dataset_name or 'DASADS' in dataset_name:
             lr = 0.0001
 
         elif 'MSL' in dataset_name:
@@ -80,34 +87,33 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         elif 'SMD' in dataset_name:
             lr = 0.0001
 
+        elif 'PUMP' in dataset_name:
+            lr = 0.001
+
     if model_name == 'TcnED':
         lr = 0.00015
-        if insert_outlier == 1:
-            if 'ASD' in dataset_name:
-                lr = 0.0015
-        else:   # 正常处理
-            if 'heart_sbeat-' in dataset_name:
-                lr = 0.00015
-            elif 'fault-' in dataset_name:
-                lr = 0.0015
-            elif 'insect-' in dataset_name:
-                lr = 0.05
-            elif 'gait-' in dataset_name:
-                lr = 0.05
-            elif 'heart_vbeat-' in dataset_name:
-                lr = 0.01
-            elif 'ASD' in dataset_name or 'DASADS' in dataset_name \
-                    or 'PUMP' in dataset_name:
-                lr = 0.00015
-            elif 'SMAP' in dataset_name:
-                lr = 0.015
-            elif 'SMD' in dataset_name:
-                lr = 0.00015
 
-            elif 'MSL' in dataset_name:
-                lr = 0.0015
-            elif 'SWaT' in dataset_name:
-                lr = 0.0015
+        if 'heart_sbeat-' in dataset_name:
+            lr = 0.00015
+        elif 'ASD' in dataset_name or 'fault-' in dataset_name:
+            lr = 0.0015
+        elif 'insect-' in dataset_name:
+            lr = 0.05
+        elif 'gait-' in dataset_name:
+            lr = 0.05
+        elif 'heart_vbeat-' in dataset_name:
+            lr = 0.01
+        elif 'DASADS' in dataset_name or 'PUMP' in dataset_name:
+            lr = 0.00015
+        elif 'SMAP' in dataset_name:
+            lr = 0.015
+        elif 'SMD' in dataset_name:
+            lr = 0.00015
+
+        elif 'MSL' in dataset_name:
+            lr = 0.0015
+        elif 'SWaT' in dataset_name:
+            lr = 0.0015
 
     return lr, epoch, a
 

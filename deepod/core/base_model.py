@@ -260,18 +260,18 @@ class BaseDeepAD(metaclass=ABCMeta):
                   f'training loss: {loss:.6f}, '
                   f'time: {time.time() - t1:.1f}s')
 
-            if Xtest is not None and Ytest is not None:
-                self.net.eval()
-                scores = self.decision_function(Xtest)
-                # DC_metrics(Ytest, scores)
-                eval_metrics = ts_metrics(Ytest, scores)
-                adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
-                result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
-                          adj_eval_metrics[2]]
-                print(result)
-                self.result_detail.append(result)
-                self.net.train()
-
+            # if Xtest is not None and Ytest is not None:
+            #     self.net.eval()
+            #     scores = self.decision_function(Xtest)
+            #     # DC_metrics(Ytest, scores)
+            #     eval_metrics = ts_metrics(Ytest, scores)
+            #     adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
+            #     result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
+            #               adj_eval_metrics[2]]
+            #     print(result)
+            #     self.result_detail.append(result)
+            #     self.net.train()
+            #
             if epoch >= self.ss_epoch:
                 self.Early_stopping()
             if self.early_stopping.early_stop:
@@ -372,6 +372,7 @@ class BaseDeepAD(metaclass=ABCMeta):
             s_final += scores
             representations.extend(z)
         representations = np.array(representations)
+        self.xPred = representations
 
         if return_rep:
             return s_final, representations

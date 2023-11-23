@@ -72,7 +72,7 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
     Columns = len(train.columns)
     actions = {okind: []}
 
-    factor = 2
+    factor = 4
     if okind == 'extreme':
         rate = num/100      # 污染率
         outliernum = int(N*rate)
@@ -98,7 +98,12 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
         else:
             timestamp = min(1000, int(sep / 10))
         lists = np.array([0, 5, 10, 15, 1, 6, 11, 16, 2, 7, 12, 17, 3, 8, 13, 18, 4, 9, 14, 19])
-        loc = np.array([i for i in range(1000, N - timestamp, sep)])
+        # lists = np.array([0, 5, 10, 15, 20, 25, 30, 35, 40, 45,
+        #                   1, 6, 11, 16, 21, 26, 31, 36, 41, 46,
+        #                   2, 7, 12, 17, 22, 27, 32, 37, 42, 47,
+        #                   3, 8, 13, 18, 23, 28, 33, 38, 43, 48,
+        #                   4, 9, 14, 19, 24, 29, 34, 39, 44, 49])
+        loc = np.array([i for i in range(timestamp, N - timestamp, sep)])
         realloc = [i for i in loc[lists[:num]]]
         labels = np.zeros(N)
         for l in realloc:
