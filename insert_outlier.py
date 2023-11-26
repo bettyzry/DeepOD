@@ -60,6 +60,8 @@ def add_outliers(data, config):
 
 
 def insert_outlier(dataset, train, num, okind, test_label=None):
+    # plt.plot(train[:, 4])
+    # plt.show()
     num = int(num)
     # extreme,shift,trend,variance
     # OUTLIER_GENERATORS = {'extreme': MultivariateExtremeOutlierGenerator,
@@ -96,8 +98,8 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
                 outlier_length.append(splits[ii] - splits[ii - 1])
             timestamp = int(np.average(outlier_length))
         else:
-            timestamp = min(1000, int(sep / 10))
-        lists = np.array([0, 5, 10, 15, 1, 6, 11, 16, 2, 7, 12, 17, 3, 8, 13, 18, 4, 9, 14, 19])
+            timestamp = int(sep / 2)
+        lists = np.array([0, 4, 8, 12, 16, 2, 6, 10, 14, 18, 1, 5, 9, 13, 17, 3, 7, 11, 15, 19])
         # lists = np.array([0, 5, 10, 15, 20, 25, 30, 35, 40, 45,
         #                   1, 6, 11, 16, 21, 26, 31, 36, 41, 46,
         #                   2, 7, 12, 17, 22, 27, 32, 37, 42, 47,
@@ -113,6 +115,9 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
     for n in range(Columns):
         actions[okind].append({'n': n, 'timestamps': timestamps, 'factor': factor})
     train = add_outliers(train, actions)
+
+    # plt.plot(train.values[:, 4])
+    # plt.show()
     return train.values, labels
 
 

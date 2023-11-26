@@ -334,10 +334,60 @@ def plot_singledata_param():
     return
 
 
+def plot_pollute():
+    dataset = '/home/xuhz/zry/DeepOD-new/polluted.csv'
+    df = pd.read_csv(dataset).values[:, 1:]
+    ts = [0, 5, 10, 15, 20]
+
+    plt.figure(figsize=(16, 5))
+
+    model = ['ASD', 'MSL', 'SMAP', 'SMD', 'SWaT',
+             'PUMP', 'DASADS', 'Fault', 'Gait', 'Heart Sbeat']
+    func = ['Norm', 'RODA', 'ICLR21', 'Arxiv22']
+
+    for i in range(10):
+        plt.subplot(2, 5, i+1)
+        index = np.array([10 * j + i for j in range(5)])
+        ASD = df[index, :]
+        for k in range(4):
+            avg = ASD[:, k * 2]
+            std = ASD[:, k * 2 + 1]
+            r1 = list(map(lambda x: x[0] - x[1], zip(avg, std)))  # 上方差
+            r2 = list(map(lambda x: x[0] + x[1], zip(avg, std)))  # 下方差
+            plt.plot(ts, avg, linewidth=3.5, label=func[k])
+            plt.fill_between(ts, r1, r2, alpha=0.1)
+        # plt.ylim(0.6, 0.85)
+        plt.title(model[i], fontsize=12)
+        if i == 0 or i == 5:
+            plt.ylabel('F1-Score', fontsize=12)
+
+    plt.legend(ncol=2, loc='upper center')  # 图例的位置，bbox_to_anchor=(0.5, 0.92),
+
+    plt.tight_layout()
+    plt.show()
+
+
+def test():
+    import os
+    dataset_root_DC = f'/home/{getpass.getuser()}/dataset/5-TSdata/_DCDetector/'
+    data = 'SMAP'
+    train = np.load(os.path.join(dataset_root_DC, data, data + '_train.npy'))
+    label = np.load(os.path.join(dataset_root_DC, data, data + '_test_label.npy'))[:38000]
+    test = np.load(os.path.join(dataset_root_DC, data, data + '_test.npy'))[:38000]
+    index = 0
+    plt.plot(train[:, index])
+    plt.show()
+    plt.plot(test[:, index])
+    plt.plot(label*np.max(test[:, index]))
+    plt.show()
+
+
 if __name__ == '__main__':
+    # test()
     # plot_loss_distribution()
     # plot_dis_distribution()
-    pollution_rate()    # 随污染率增加f1的变化
+    # pollution_rate()    # 随污染率增加f1的变化
+    plot_pollute()          # 不同方法在不同污染率下的性能
     # plot_hotmap()
     # plot_param_distribution()
     # plot_singledata_param()

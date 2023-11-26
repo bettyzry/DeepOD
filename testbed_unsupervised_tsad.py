@@ -33,7 +33,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='ASD',
+                    default='MSL',
                     help='ASD,MSL,SMAP,SMD,SWaT_cut,PUMP,DASADS,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat'
                          'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
@@ -49,7 +49,7 @@ parser.add_argument("--model", type=str, default='NCAD',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer"
                     )
 
-parser.add_argument('--silent_header', type=bool, default=False)
+parser.add_argument('--silent_header', type=bool, default=True)
 parser.add_argument("--flag", type=str, default='')
 parser.add_argument("--note", type=str, default='')
 
@@ -58,7 +58,7 @@ parser.add_argument('--stride', type=int, default=1)
 
 parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
 parser.add_argument('--insert_outlier', type=int, default=1)      # 0不插入异常，1插入异常
-parser.add_argument('--rate', type=int, default=10)                # 异常数目
+parser.add_argument('--rate', type=int, default=15)                # 异常数目
 args = parser.parse_args()
 
 # rate_list = [0, 0.01, 0.02, 0.1, 0.15, 0.2]
