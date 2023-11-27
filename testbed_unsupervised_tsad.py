@@ -19,7 +19,7 @@ from insert_outlier import insert_outlier
 from sample_selection.DQNSS import DQNSS
 from sample_selection.QSS import QSS
 from sample_selection.ENV import ADEnv
-# from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution
+from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution
 
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
 dataset_root_DC = f'/home/{getpass.getuser()}/dataset/5-TSdata/_DCDetector/'
@@ -33,7 +33,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='MSL',
+                    default='PUMP',
                     help='ASD,MSL,SMAP,SMD,SWaT_cut,PUMP,DASADS,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat'
                          'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
@@ -45,11 +45,11 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='NCAD',
+parser.add_argument("--model", type=str, default='LSTMED',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer"
                     )
 
-parser.add_argument('--silent_header', type=bool, default=True)
+parser.add_argument('--silent_header', type=bool, default=False)
 parser.add_argument("--flag", type=str, default='')
 parser.add_argument("--note", type=str, default='')
 
@@ -210,14 +210,13 @@ def main():
         entity_metric_std_lst = []
         entity_t_lst = []
         for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
-            # train_data, train_labels = insert_pollution(train_data, test_data, labels, args.rate, args.seq_len)
-            # train_data, train_labels, test_data, labels = insert_pollution_new(test_data, labels, args.rate)
-            # train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
-            # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
             # extreme, shift, trend, variance
             if args.insert_outlier:
-                train_data, train_labels = insert_outlier(dataset, train_data, args.rate, 'variance')
-
+                train_data, train_labels = insert_outlier(dataset, train_data, args.rate, 'variance')     # agots插入异常
+                # train_data, train_labels = insert_pollution(train_data, test_data, labels, args.rate, args.seq_len)   # 分段后插入异常
+                # train_data, train_labels = insert_pollution_new(train_data, test_data, labels, args.rate)   # 插入完整异常序列
+                # train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
+                # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
             entries = []
             t_lst = []
             lr, epoch, a = get_lr(dataset_name, args.model, args.insert_outlier, model_configs['lr'], model_configs['epochs'])

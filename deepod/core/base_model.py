@@ -637,7 +637,10 @@ class BaseDeepAD(metaclass=ABCMeta):
             importance = None
             metrics = np.array([])
             losses = np.array([])
-            self.net.eval()
+            if self.model_name != 'LSTMED':
+                self.net.eval()
+            else:
+                self.net.train()
             for ii, batch_x in enumerate(self.train_loader):
                 metric, loss = self.get_importance_dL(batch_x)
                 # metric, loss = self.get_importance_ICLR21(batch_x)

@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn import metrics
 import random
+import matplotlib.pyplot as plt
 
 
 def get_sub_seqs(x_arr, seq_len=100, stride=1):
@@ -101,13 +102,16 @@ def insert_pollution(train_data, test_data, labels, rate, seq_len):
     oseqs = np.where(y_seqs == 1)[0]
     okinds = len(oseqs)
     datasize = int(len(train_data)/seq_len)
+    rate = rate/100
     onum = int(datasize*rate)
     ostarts = random.sample(range(0, datasize-1), onum)
     train_labels = np.zeros(len(train_data))
     for ostart in ostarts:
         index = random.randint(0, okinds-1)
-        train_data[ostart*seq_len: (ostart+1)*seq_len] += test_seq[oseqs[index]]
+        train_data[ostart*seq_len: (ostart+1)*seq_len] = test_seq[oseqs[index]]
         train_labels[ostart*seq_len: (ostart+1)*seq_len] = 1
+    plt.plot(train_data[:, 4])
+    plt.show()
     return train_data, train_labels
 
 
@@ -118,44 +122,43 @@ def split_pollution(test_data, labels):
     return train_data, train_labels, test_data, labels
 
 
-def insert_pollution_new(test_data, labels, rate):
+def insert_pollution_new(train_data, test_data, labels, rate):
+    # plt.plot(train_data[:, 0])
+    # plt.show()
     # 将一个序列的outlier插入
     splits = np.where(labels[1:] != labels[:-1])[0] + 1
     splits = np.concatenate([[0], splits])
     is_anomaly = labels[0] == 1
     data_splits = [test_data[sp: splits[ii+1]] for ii, sp in enumerate(splits[:-1])]
-    outliers = [data_splits[ii] for ii, sp in enumerate(data_splits) if ii % 2 != is_anomaly]
+    outliers = [sp for ii, sp in enumerate(data_splits) if ii % 2 != is_anomaly]
 
-    split = 0.6
-    train_num = int(len(test_data)*split)
-    train_data = test_data[:train_num]
-    train_l = labels[:train_num]
+    length = [len(o) for o in outliers]
+    timestamp = int(np.average(length))                # 平均异常长度
+    train_labels = np.zeros(len(train_data))
+    rate = rate/100
+    Onum = int(len(train_data)*rate)
+    N = int(Onum/timestamp)+1   # 总异常数
+    sep = int(len(train_data)/N)
+    # N = int(sumN/0.2*rate)                          # 本次插入的异常数目
+    # loc = np.array([i for i in range(timestamp, N - timestamp, sep)])
+    start = timestamp
+    okinds = len(outliers)
+    count = 0
+    for i in range(N):
+        train_data[start: len(outliers[count])+start] += outliers[count]
+        train_labels[start: len(outliers[count])+start] = 1
+        count += 1
+        count = count % okinds
+        start += sep
 
-    ii = 0
-    train_data_o = np.array([])
-    train_labels = np.array([])
-    train_num_o = train_num
-    while len(train_data_o) <= train_num_o:
-        N = len(train_data_o)
-        No = sum(train_labels)
-        if N == 0:
-            oindex = random.randint(0, len(outliers)-1)
-            train_data_o = outliers[oindex]
-            train_labels = np.ones(len(outliers[oindex]))
-        elif No/N <= rate:
-            oindex = random.randint(0, len(outliers)-1)
-            train_data_o = np.insert(train_data_o, N, outliers[oindex], axis=0)
-            train_labels = np.concatenate([train_labels, np.ones(len(outliers[oindex]))])
-        else:       # 插入异常,把一整个序列装进去
-            while train_l[ii % len(train_l)] == 1:
-                ii += 1
-            train_data_o = np.insert(train_data_o, N, train_data[ii], axis=0)
-            train_labels = np.concatenate([train_labels, [0]])
-            ii += 1
-
-    test_data = test_data[train_num:]
-    labels = labels[train_num:]
-    return train_data_o, train_labels, test_data, labels
+    # plt.plot(train_data[:, 0])
+    # plt.plot(train_labels)
+    # plt.show()
+    #
+    # plt.plot(test_data[:, 0])
+    # plt.plot(labels)
+    # plt.show()
+    return train_data, train_labels
 
 
 def insert_pollution_seq(test_data, labels, rate, seq_len):

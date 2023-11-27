@@ -26,7 +26,7 @@ class LSTMED(BaseDeepAD):
         Hidden size is set equal to number of pca components obtained.
         """
         super(LSTMED, self).__init__(
-            model_name='TcnED', data_type='ts', epochs=epochs, batch_size=batch_size, lr=lr,
+            model_name='LSTMED', data_type='ts', epochs=epochs, batch_size=batch_size, lr=lr,
             seq_len=seq_len, stride=stride,
             epoch_steps=epoch_steps, prt_steps=prt_steps, device=device,
             verbose=verbose, random_state=random_state, a=a
@@ -109,7 +109,7 @@ class LSTMED(BaseDeepAD):
         self.net = LSTMEDModule(self.n_features, self.seq_len, self.hidden_size, self.n_layers, self.use_bias, self.dropout,
                                 device=self.device).to(self.device)
         self.train_loader = DataLoader(X, batch_size=self.batch_size,
-                                       shuffle=True, pin_memory=True)
+                                       shuffle=True, pin_memory=True, drop_last=False)
         self.criterion = torch.nn.MSELoss(reduction="mean")
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=self.lr)
 

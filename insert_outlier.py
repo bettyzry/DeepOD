@@ -98,7 +98,7 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
                 outlier_length.append(splits[ii] - splits[ii - 1])
             timestamp = int(np.average(outlier_length))
         else:
-            timestamp = int(sep / 2)
+            timestamp = int(sep / 5)
         lists = np.array([0, 4, 8, 12, 16, 2, 6, 10, 14, 18, 1, 5, 9, 13, 17, 3, 7, 11, 15, 19])
         # lists = np.array([0, 5, 10, 15, 20, 25, 30, 35, 40, 45,
         #                   1, 6, 11, 16, 21, 26, 31, 36, 41, 46,
