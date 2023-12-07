@@ -186,12 +186,12 @@ def main():
                 entries.append(adj_eval_metrics)
                 t_lst.append(t)
 
-                if not args.silent_header:
-                    trainsets_df = pd.DataFrame.from_dict(clf.trainsets, orient='index').transpose()
-                    trainsets_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(args.rate*args.insert_outlier) + str(i)+'.csv', index=False)
-                    if len(clf.result_detail) != 0:
-                        df_result = pd.DataFrame(clf.result_detail, columns=['auc', 'pr', 'f1', 'adjauc', 'adjpr', 'adjf1'])
-                        df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{funcs[args.sample_selection]}.{args.rate*args.insert_outlier}.{i}.csv'))
+                # if not args.silent_header:
+                #     trainsets_df = pd.DataFrame.from_dict(clf.trainsets, orient='index').transpose()
+                #     trainsets_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(args.rate*args.insert_outlier) + str(i)+'.csv', index=False)
+                #     if len(clf.result_detail) != 0:
+                #         df_result = pd.DataFrame(clf.result_detail, columns=['auc', 'pr', 'f1', 'adjauc', 'adjpr', 'adjf1'])
+                #         df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{funcs[args.sample_selection]}.{args.rate*args.insert_outlier}.{i}.csv'))
 
             avg_entry = np.average(np.array(entries), axis=0)
             std_entry = np.std(np.array(entries), axis=0)
