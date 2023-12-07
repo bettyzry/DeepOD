@@ -60,6 +60,65 @@ def add_outliers(data, config):
 
 
 def insert_outlier(dataset, train, num, okind, test_label=None):
+    if num == 0:
+        label = np.zeros(len(train))
+        return train, label
+    # plt.plot(train[:, 4])
+    # plt.show()
+    num = int(num)
+    train = pd.DataFrame(train)
+    N = len(train)
+    Columns = len(train.columns)
+    actions = {okind: []}
+
+    factor = 2
+    if okind == 'extreme':
+        rate = num/100      # 污染率
+        outliernum = int(N*rate)
+        loc = pd.read_csv('loc.csv', index_col=0)
+        loc = loc[dataset].values
+        realloc = loc[:outliernum]
+        labels = np.zeros(N)
+        timestamps = [(l, ) for l in realloc]
+        for l in realloc:
+            labels[l] = 1
+    else:
+        sep = int(N / num)
+        if test_label is not None:
+            splits = np.where(test_label[1:] != test_label[:-1])[0] + 1
+            is_anomaly = test_label[0] == 1
+            outlier_length = []
+            if is_anomaly:
+                splits = splits[1:]
+            for ii in range(1, len(splits), 2):
+                outlier_length.append(splits[ii] - splits[ii - 1])
+            timestamp = int(np.average(outlier_length))
+        else:
+            timestamp = int(sep / 2)
+        # lists = np.array([0, 4, 8, 12, 16, 2, 6, 10, 14, 18, 1, 5, 9, 13, 17, 3, 7, 11, 15, 19])
+        # lists = np.array([0, 5, 10, 15, 20, 25, 30, 35, 40, 45,
+        #                   1, 6, 11, 16, 21, 26, 31, 36, 41, 46,
+        #                   2, 7, 12, 17, 22, 27, 32, 37, 42, 47,
+        #                   3, 8, 13, 18, 23, 28, 33, 38, 43, 48,
+        #                   4, 9, 14, 19, 24, 29, 34, 39, 44, 49])
+        loc = np.array([i for i in range(timestamp, N - timestamp, sep)])
+        realloc = loc
+        labels = np.zeros(N)
+        for l in realloc:
+            labels[l:l + timestamp] = 1
+        timestamps = [(l, l + timestamp) for l in realloc]
+
+    for n in range(Columns):
+        actions[okind].append({'n': n, 'timestamps': timestamps, 'factor': factor})
+    train = add_outliers(train, actions)
+
+    plt.plot(train.values[:, 4])
+    plt.show()
+    train = train.values
+    return train, labels
+
+
+def insert_outlier_old(dataset, train, num, okind, test_label=None):
     # plt.plot(train[:, 4])
     # plt.show()
     num = int(num)
@@ -74,7 +133,7 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
     Columns = len(train.columns)
     actions = {okind: []}
 
-    factor = 4
+    factor = 2
     if okind == 'extreme':
         rate = num/100      # 污染率
         outliernum = int(N*rate)
@@ -86,7 +145,7 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
         for l in realloc:
             labels[l] = 1
     else:
-        sum_num = 20
+        sum_num = 40
         sep = int(N / sum_num)
         if test_label is not None:
             splits = np.where(test_label[1:] != test_label[:-1])[0] + 1
@@ -99,12 +158,16 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
             timestamp = int(np.average(outlier_length))
         else:
             timestamp = int(sep / 5)
-        lists = np.array([0, 4, 8, 12, 16, 2, 6, 10, 14, 18, 1, 5, 9, 13, 17, 3, 7, 11, 15, 19])
+        # lists = np.array([0, 4, 8, 12, 16, 2, 6, 10, 14, 18, 1, 5, 9, 13, 17, 3, 7, 11, 15, 19])
         # lists = np.array([0, 5, 10, 15, 20, 25, 30, 35, 40, 45,
         #                   1, 6, 11, 16, 21, 26, 31, 36, 41, 46,
         #                   2, 7, 12, 17, 22, 27, 32, 37, 42, 47,
         #                   3, 8, 13, 18, 23, 28, 33, 38, 43, 48,
         #                   4, 9, 14, 19, 24, 29, 34, 39, 44, 49])
+        lists = np.array([0, 4, 8, 12, 16, 20, 24, 28, 32, 36,
+                          1, 5, 9, 13, 17, 21, 25, 29, 33, 37,
+                          2, 6, 10, 14, 18, 22, 26, 30, 34, 38,
+                          3, 7, 11, 15, 19, 23, 27, 31, 35, 39])
         loc = np.array([i for i in range(timestamp, N - timestamp, sep)])
         realloc = [i for i in loc[lists[:num]]]
         labels = np.zeros(N)
@@ -116,8 +179,8 @@ def insert_outlier(dataset, train, num, okind, test_label=None):
         actions[okind].append({'n': n, 'timestamps': timestamps, 'factor': factor})
     train = add_outliers(train, actions)
 
-    # plt.plot(train.values[:, 4])
-    # plt.show()
+    plt.plot(train.values[:, 4])
+    plt.show()
     return train.values, labels
 
 

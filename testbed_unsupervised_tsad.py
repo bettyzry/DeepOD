@@ -19,7 +19,7 @@ from insert_outlier import insert_outlier
 from sample_selection.DQNSS import DQNSS
 from sample_selection.QSS import QSS
 from sample_selection.ENV import ADEnv
-from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution
+from deepod.utils.utility import insert_pollution, insert_pollution_seq, insert_pollution_new, split_pollution, insert_pollution_from_test
 
 dataset_root = f'/home/{getpass.getuser()}/dataset/5-TSdata/_processed_data/'
 dataset_root_DC = f'/home/{getpass.getuser()}/dataset/5-TSdata/_DCDetector/'
@@ -33,7 +33,7 @@ parser.add_argument("--trainsets_dir", type=str, default='@trainsets/',
                     help="the output file path")
 
 parser.add_argument("--dataset", type=str,
-                    default='PUMP',
+                    default='ASD',
                     help='ASD,MSL,SMAP,SMD,SWaT_cut,PUMP,DASADS,UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat'
                          'UCR_natural_fault,UCR_natural_gait,UCR_natural_heart_sbeat',
                     # help='WADI,PUMP,PSM,ASD,SWaT_cut,DASADS,EP,UCR_natural_mars,UCR_natural_insect,UCR_natural_heart_vbeat2,'
@@ -45,7 +45,7 @@ parser.add_argument("--entities", type=str,
                          'or a list of entity names split by comma '    # ['D-14', 'D-15'], ['D-14']
                     )
 parser.add_argument("--entity_combined", type=int, default=1, help='1:merge, 0: not merge')
-parser.add_argument("--model", type=str, default='LSTMED',
+parser.add_argument("--model", type=str, default='TcnED',
                     help="TcnED, TranAD, NCAD, NeuTraLTS, LSTMED, TimesNet, AnomalyTransformer"
                     )
 
@@ -56,9 +56,9 @@ parser.add_argument("--note", type=str, default='')
 parser.add_argument('--seq_len', type=int, default=30)
 parser.add_argument('--stride', type=int, default=1)
 
-parser.add_argument('--sample_selection', type=int, default=0)      # 0：不划窗，1：min划窗
+parser.add_argument('--sample_selection', type=int, default=7)      # 0：不划窗，1：min划窗
 parser.add_argument('--insert_outlier', type=int, default=1)      # 0不插入异常，1插入异常
-parser.add_argument('--rate', type=int, default=15)                # 异常数目
+parser.add_argument('--rate', type=int, default=10)                # 异常数目
 args = parser.parse_args()
 
 # rate_list = [0, 0.01, 0.02, 0.1, 0.15, 0.2]
@@ -78,92 +78,6 @@ with open(path) as f:
         model_configs = {}
 model_configs['seq_len'] = args.seq_len
 model_configs['stride'] = args.stride
-
-
-def plot(xTest, yTest, xPred, adj_score, score):
-    if len(xPred) != len(xTest):
-        new_xPred = [i[0][0] for i in xPred[:-1]]
-        last = [i[0] for i in xPred[-1]]
-        new_xPred = np.concatenate([new_xPred, last])
-        xPred = new_xPred
-
-    xTest = [i[0] for i in xTest]
-
-    score = np.abs(xTest - xPred)
-
-    t = np.percentile(score, (1-sum(yTest)*2.5/len(yTest))*100)
-    index = np.where(score > t)[0]
-    adj_yPred = np.zeros(len(score))
-    adj_yPred[index] = 1
-
-    length = 5000
-    splits = np.where(yTest[1:] != yTest[:-1])[0] + 1
-    is_anomaly = yTest[0] == 1
-    timestamp = np.arange(len(xTest))
-    pos = 0
-    end = 0
-    # for sp in splits:
-    #     if is_anomaly:
-    #         if sp < end:
-    #             is_anomaly = not is_anomaly
-    #             pos = sp
-    #             continue
-    #         left = int((length - (sp - pos)) / 2)
-    #         start = max(0, pos - left)
-    #         end = min(len(yTest), sp + left)
-    #         xTest_plot = xTest[start:end]
-    #         xPred_plot = xPred[start:end]
-    #         yTest_plot = yTest[start:end]
-    #         yPred_plot = adj_yPred[start:end]
-    #         residual = score[start:end]
-    #         ts = timestamp[start:end]
-    #         plt.suptitle(args.model)
-    #
-    #         plt.subplot(511)
-    #         plt.plot(ts, xTest_plot)
-    #         plt.ylabel('xTest')
-    #
-    #         plt.subplot(512)
-    #         plt.plot(ts, xPred_plot)
-    #         plt.ylabel('xPred')
-    #
-    #         plt.subplot(513)
-    #         plt.plot(ts, residual)
-    #         plt.ylabel('residual')
-    #
-    #         plt.subplot(514)
-    #         plt.plot(ts, yTest_plot)
-    #         plt.ylabel('yTest')
-    #
-    #         plt.subplot(515)
-    #         plt.plot(ts, yPred_plot)
-    #         plt.ylabel('yPred')
-    #
-    #         plt.show()
-    #     is_anomaly = not is_anomaly
-    #     pos = sp
-
-    plt.suptitle(args.model+'-kpi12')
-    plt.subplot(511)
-    plt.plot(timestamp, xTest)
-    plt.ylabel('xTest')
-
-    plt.subplot(512)
-    plt.plot(timestamp, xPred)
-    plt.ylabel('xPred')
-
-    plt.subplot(513)
-    plt.plot(timestamp, score)
-    plt.ylabel('residual')
-
-    plt.subplot(514)
-    plt.plot(timestamp, yTest)
-    plt.ylabel('yTest')
-
-    plt.subplot(515)
-    plt.plot(timestamp, adj_yPred)
-    plt.ylabel('yPred')
-    plt.show()
 
 
 def main():
@@ -212,11 +126,18 @@ def main():
         for train_data, test_data, labels, dataset_name in zip(train_lst, test_lst, label_lst, name_lst):
             # extreme, shift, trend, variance
             if args.insert_outlier:
-                train_data, train_labels = insert_outlier(dataset, train_data, args.rate, 'variance')     # agots插入异常
+                # train_data, train_labels = insert_outlier(dataset, train_data, args.rate, 'variance')     # agots插入异常
+                train_data, train_labels = insert_pollution_new(train_data, test_data, labels, args.rate)   # 插入完整异常序列
+                # train_data, train_labels, test_data, labels = insert_pollution_from_test(test_data, labels, args.rate)
                 # train_data, train_labels = insert_pollution(train_data, test_data, labels, args.rate, args.seq_len)   # 分段后插入异常
-                # train_data, train_labels = insert_pollution_new(train_data, test_data, labels, args.rate)   # 插入完整异常序列
                 # train_seq_o, train_seq_l, test_data, labels = insert_pollution_seq(test_data, labels, args.rate, args.seq_len)
                 # train_data, train_labels, test_data, labels = split_pollution(test_data, labels)
+            else:
+                train_labels = np.zeros(len(train_data))
+
+            # plt.plot(train_data[:, 4])
+            # plt.show()
+
             entries = []
             t_lst = []
             lr, epoch, a = get_lr(dataset_name, args.model, args.insert_outlier, model_configs['lr'], model_configs['epochs'])
@@ -233,8 +154,8 @@ def main():
                 clf.sample_selection = args.sample_selection
                 if args.sample_selection != 8:
                     # clf.fit(None, None, test_data, labels, train_seq_o, train_seq_l)
-                    # clf.fit(train_data, train_labels, test_data, labels)
-                    clf.fit(train_data, None, test_data, labels)
+                    clf.fit(train_data, train_labels, test_data, labels)
+                    # clf.fit(train_data, None, test_data, labels)
                     # clf.fit(train_data)
                     # clf.fit(test_data, labels)
                     # clf.fit(train_data, labels)
@@ -253,7 +174,6 @@ def main():
                 scores = clf.decision_function(test_data)
                 eval_metrics = ts_metrics(labels, scores)
                 adj_eval_metrics = ts_metrics(labels, point_adjustment(labels, scores))
-                # plot(test_data, labels, clf.xPred, point_adjustment(labels, scores), scores)
 
                 # print single results
                 txt = f'{dataset_name},'
@@ -272,11 +192,6 @@ def main():
                     if len(clf.result_detail) != 0:
                         df_result = pd.DataFrame(clf.result_detail, columns=['auc', 'pr', 'f1', 'adjauc', 'adjpr', 'adjf1'])
                         df_result.to_csv(os.path.join(args.output_dir, f'{args.model}.{dataset_name}.{funcs[args.sample_selection]}.{args.rate*args.insert_outlier}.{i}.csv'))
-                    if args.sample_selection == 2:
-                        clf.Arxiv17['std_avg'] = (clf.Arxiv17['avg']-np.min(clf.Arxiv17['avg']))/(np.max(clf.Arxiv17['avg'])-np.min(clf.Arxiv17['avg']))
-                        clf.Arxiv17['std_std'] = (clf.Arxiv17['std']-np.min(clf.Arxiv17['std']))/(np.max(clf.Arxiv17['std'])-np.min(clf.Arxiv17['std']))
-                        Arxiv17_df = pd.DataFrame.from_dict(clf.Arxiv17, orient='index').transpose()
-                        Arxiv17_df.to_csv(trainsets_dir + dataset_name + '_' + funcs[args.sample_selection] + str(args.rate*args.insert_outlier) + str(i)+'.csv', index=False)
 
             avg_entry = np.average(np.array(entries), axis=0)
             std_entry = np.std(np.array(entries), axis=0)
@@ -412,3 +327,8 @@ if __name__ == '__main__':
     # print_Nused()
     # print_dataset()
     main()
+    # for rate in [0, 5, 10, 15, 20]:
+    #     for k in [0, 7, 5, 6]:
+    #         args.rate = rate
+    #         args.sample_selection = k
+    #         main()

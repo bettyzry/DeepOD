@@ -42,14 +42,15 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         elif 'MSL' in dataset_name:
             lr = 0.0000002
 
-
         elif 'SWaT_cut' in dataset_name:    # 有问题
             lr = 0.0002
 
     if model_name == 'NeuTraLTS':
         lr = 0.001
-        if 'gait-' in dataset_name or 'fault-' in dataset_name:
+        if 'gait-' in dataset_name:
             lr = 0.001
+        elif 'fault-' in dataset_name:
+            lr = 0.00001
         elif 'heart_sbeat-' in dataset_name:
             lr = 0.000001
         elif 'heart_vbeat-' in dataset_name or 'insect-' in dataset_name:
@@ -57,7 +58,7 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         elif 'SWaT' in dataset_name:
             lr = 0.0001
         elif 'ASD' in dataset_name:
-            lr = 0.001
+            lr = 0.1      # 0.001
         elif 'PUMP' in dataset_name:
             lr = 0.001
         elif 'MSL' in dataset_name or 'SMAP' in dataset_name:
@@ -65,7 +66,7 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         elif 'DASADS' in dataset_name:
             lr = 0.0001
         elif 'SMD' in dataset_name:
-            lr = 0.1  # ?
+            lr = 0.0001  # ?
 
     if model_name == 'TranAD':
         lr = 0.000001
@@ -77,9 +78,10 @@ def get_lr(dataset_name, model_name, insert_outlier, ori_lr, ori_epoch):
         elif 'fault-' in dataset_name:
             lr = 0.00001    # 未定
 
-        elif 'ASD' in dataset_name or 'DASADS' in dataset_name:
+        elif 'ASD' in dataset_name:
+            lr = 0.001
+        elif 'DASADS' in dataset_name:
             lr = 0.0001
-
         elif 'MSL' in dataset_name:
             lr = 0.00001
         elif 'SMAP' in dataset_name:

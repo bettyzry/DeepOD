@@ -260,17 +260,17 @@ class BaseDeepAD(metaclass=ABCMeta):
                   f'training loss: {loss:.6f}, '
                   f'time: {time.time() - t1:.1f}s')
 
-            # if Xtest is not None and Ytest is not None:
-            #     self.net.eval()
-            #     scores = self.decision_function(Xtest)
-            #     # DC_metrics(Ytest, scores)
-            #     eval_metrics = ts_metrics(Ytest, scores)
-            #     adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
-            #     result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
-            #               adj_eval_metrics[2]]
-            #     print(result)
-            #     self.result_detail.append(result)
-            #     self.net.train()
+            if Xtest is not None and Ytest is not None:
+                self.net.eval()
+                scores = self.decision_function(Xtest)
+                # DC_metrics(Ytest, scores)
+                eval_metrics = ts_metrics(Ytest, scores)
+                adj_eval_metrics = ts_metrics(Ytest, point_adjustment(Ytest, scores))
+                result = [eval_metrics[0], eval_metrics[1], eval_metrics[2], adj_eval_metrics[0], adj_eval_metrics[1],
+                          adj_eval_metrics[2]]
+                print(result)
+                self.result_detail.append(result)
+                self.net.train()
             #
             if epoch >= self.ss_epoch:
                 self.Early_stopping()
@@ -678,6 +678,10 @@ class BaseDeepAD(metaclass=ABCMeta):
                 # _range = np.max(dis) - np.min(dis)
                 # dis = (dis - np.min(dis)) / _range
 
+                mean = np.mean(metrics, axis=0)
+                metrics = np.divide(metrics, mean, out=np.zeros_like(metrics, dtype=np.float64), where=mean != 0)
+                metrics = normalize(metrics, axis=1, norm='l2')  # 对metric按行进行归一化
+
                 importance = np.sum(metrics, axis=0) / len(self.train_data)
                 self.true_key_param = importance
                 dis = np.linalg.norm(importance - metrics, axis=1, ord=np.Inf)
@@ -782,9 +786,9 @@ class BaseDeepAD(metaclass=ABCMeta):
             if self.param_musk is not None:
                 gv = gv[self.param_musk]    # 只保留最重要的万个参数
             gv_metric.append(abs(gv))
-        mean = np.mean(gv_metric, axis=0)
-        gv_metric = np.divide(gv_metric, mean, out=np.zeros_like(gv_metric, dtype=np.float64), where=mean != 0)
-        gv_metric = normalize(gv_metric, axis=1, norm='l2')   # 对metric按行进行归一化
+        # mean = np.mean(gv_metric, axis=0)
+        # gv_metric = np.divide(gv_metric, mean, out=np.zeros_like(gv_metric, dtype=np.float64), where=mean != 0)
+        # gv_metric = normalize(gv_metric, axis=1, norm='l2')   # 对metric按行进行归一化
         return gv_metric, losses.cpu().detach().numpy()
 
     def get_importance_ICLR21(self, batch_x):

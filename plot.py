@@ -21,28 +21,95 @@ def zscore(x):
 
 
 def plot_loss_distribution():
-    fillname = 'PUMP'     # 'MSL_combined'
-    step = 0
-    data_root = '/home/xuhz/zry/DeepOD-new/@trainsets/TcnED./%s_norm00.csv' % fillname
+    plt.figure(dpi=300, figsize=(8,3))
+    fontsize = 15
+    step = 17
+    data_root = '/home/xuhz/zry/DeepOD-new/plotsource/ASD_combined_norm150.csv'
     df = pd.read_csv(data_root)
+    df = df.dropna()
     step = str(step)
 
+    loss = df['loss'+step].values
+    df['loss'+step] = (loss-np.min(loss))/(np.max(loss)-np.min(loss))
     adjloss = point_adjustment(df['yseq0'].values, df['loss'+step].values)
     df['adjloss'] = adjloss
-
 
     true = df[df.yseq0 == 0]
     false = df[df.yseq0 == 1]
 
     # 绘制多个变量的密度分布图
-    sns.kdeplot(true['loss'+step], shade=True, color="b", label='Clean')
-    sns.kdeplot(false['loss'+step], shade=True, color="r", label='Polluted')
-    plt.legend()
+    # sns.kdeplot(true['loss'+step], shade=True, color="b", label='Clean')
+    # sns.kdeplot(false['loss'+step], shade=True, color="r", label='Polluted')
+    # plt.legend()
+    # plt.show()
+    plt.subplot(121)
+    ax = plt.gca()
+    sns.kdeplot(true['adjloss'], shade=True, color="b", label='Normal')
+    sns.kdeplot(false['adjloss'], shade=True, color="r", label='Abnormal')
+    plt.legend(fontsize=fontsize*0.8)
+    plt.ylabel('Density', fontsize=fontsize)
+    plt.xlabel('Normalized Loss', fontsize=fontsize)
+    plt.tick_params(labelsize=fontsize*0.8)
+    ax.add_patch(plt.Rectangle((0.075, 0), 0.335, 2.3, color='black', fill=False, linewidth=2))
+    plt.text(0.22, 3, "Hard Samples", fontdict={'fontsize': fontsize*0.8})      # bbox={'facecolor': 'g', 'alpha': 0.5}
+    # ax.add_patch(plt.Rectangle((-0.02, 0), 0.21, 2.3, color='black', fill=False, linewidth=2))
+    # plt.text(0.22, 3, "Hard Samples", fontdict={'fontsize': fontsize * 0.8})  # bbox={'facecolor': 'g', 'alpha': 0.5}
+
+    # plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.2)
+    # plt.title('(a) Loss Function', y=-0.5, fontdict={'fontsize': fontsize})
+
+    plt.subplot(122)
+    plt.plot([0, 1], [0.5, 0.5], c='black', linestyle='--')
+    plt.plot([0.5, 0.5], [0, 1], c='black', linestyle='--')
+    plt.ylabel('Behavior Value', fontsize=fontsize)
+    plt.xlabel('Normalized Loss', fontsize=fontsize)
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    plt.text(0.55, 0.7, "Abnormal\nSimple Samples", fontdict={'fontsize': fontsize*0.8, 'color': 'r'})      # bbox={'facecolor': 'g', 'alpha': 0.5}
+    plt.text(0.05, 0.2, "Normal\nSimple Samples", fontdict={'fontsize': fontsize * 0.8, 'color': 'b'})  # bbox={'facecolor': 'g', 'alpha': 0.5}
+    plt.text(0.55, 0.2, "Normal\nHard Samples", fontdict={'fontsize': fontsize * 0.8, 'color': 'b'})  # bbox={'facecolor': 'g', 'alpha': 0.5}
+    plt.text(0.05, 0.7, "Abnormal\nHard Samples",
+             fontdict={'fontsize': fontsize * 0.8, 'color': 'r'})  # bbox={'facecolor': 'g', 'alpha': 0.5}
+    # plt.title('(b) Behavior Function and Loss Function', y=-0.5, fontdict={'fontsize': fontsize})
+
+    plt.tight_layout()
+    plt.savefig('./plotsource/loss.png', dpi=300)
     plt.show()
 
-    sns.kdeplot(true['adjloss'], shade=True, color="b", label='Clean')
-    sns.kdeplot(false['adjloss'], shade=True, color="r", label='Polluted')
-    plt.legend()
+
+def plot_loss_distribution_old():
+    plt.figure(dpi=300)
+    fontsize = 15
+    step = 17
+    data_root = '/home/xuhz/zry/DeepOD-new/plotsource/ASD_combined_norm150.csv'
+    df = pd.read_csv(data_root)
+    df = df.dropna()
+    step = str(step)
+
+    loss = df['loss'+step].values
+    df['loss'+step] = (loss-np.min(loss))/(np.max(loss)-np.min(loss))
+    adjloss = point_adjustment(df['yseq0'].values, df['loss'+step].values)
+    df['adjloss'] = adjloss
+
+    true = df[df.yseq0 == 0]
+    false = df[df.yseq0 == 1]
+
+    # 绘制多个变量的密度分布图
+    # sns.kdeplot(true['loss'+step], shade=True, color="b", label='Clean')
+    # sns.kdeplot(false['loss'+step], shade=True, color="r", label='Polluted')
+    # plt.legend()
+    # plt.show()
+
+    ax = plt.gca()
+    sns.kdeplot(true['adjloss'], shade=True, color="b", label='Normal Samples')
+    sns.kdeplot(false['adjloss'], shade=True, color="r", label='Abnormal Samples')
+    plt.legend(fontsize=fontsize)
+    plt.ylabel('Density', fontsize=fontsize)
+    plt.xlabel('Loss', fontsize=fontsize)
+    plt.tick_params(labelsize=fontsize*0.8)
+    ax.add_patch(plt.Rectangle((0.075, 0), 0.335, 2.3, color='black', fill=False, linewidth=2))
+    ax.text(0.22, 3, "Hard Samples", fontdict={'fontsize': fontsize*0.8})      # bbox={'facecolor': 'g', 'alpha': 0.5}
+    plt.savefig('./plotsource/loss-old.png', dpi=300)
     plt.show()
 
     # sns.kdeplot(true['random_loss'], shade=True, color="r")
@@ -201,7 +268,7 @@ def plotT(data_root, step):
 
 
 def pollution_rate():
-    fontsize = 18
+    fontsize = 20
     plt.figure(dpi=300, figsize=(8,6))
     # 改变文字大小参数-fontsize
     plt.xticks(fontsize=fontsize)
@@ -218,13 +285,14 @@ def pollution_rate():
         data_root = '/home/xuhz/zry/DeepOD-new/plotsource/per_by_rate/TranAD.DASADS_combined.norm.%s.0.csv' % str(rate)
         df = pd.read_csv(data_root)
         y = df[func].values
-        plt.plot(y, label=str(int(rate*100))+'% symnoise')
+        plt.plot(y, label=str(int(rate*100))+'% Anomaly Rate')
     plt.legend(fontsize=fontsize)
     plt.xlabel('Epoch', fontsize=fontsize)
     plt.ylabel('F1', fontsize=fontsize)
     # plt.title('')
+    plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.2)
     # plt.show()
-    plt.savefig('./plotsource/f1_rate.eps', dpi=300)
+    # plt.savefig('./plotsource/f1_rate.eps', dpi=300)
     plt.savefig('./plotsource/f1_rate.png', dpi=300)
 
 
@@ -335,7 +403,41 @@ def plot_singledata_param():
 
 
 def plot_pollute():
-    dataset = '/home/xuhz/zry/DeepOD-new/polluted.csv'
+    dataset = '/home/xuhz/zry/DeepOD-new/plotsource/polluted.csv'
+    df = pd.read_csv(dataset).values[:, 1:]
+    ts = [0, 5, 10, 15, 20]
+
+    data = ['ASD', 'MSL', 'SMAP', 'SMD', 'SWaT',
+             'PUMP', 'DASADS', 'Fault', 'Gait', 'Heart Sbeat']
+    model = ['TcnED', 'TranAD', 'NeuTral', 'NCAD']
+    func = ['Norm', 'RODA', 'ICLR21', 'Arxiv22']
+
+    fig = plt.figure(figsize=(6, 6))
+    for i in range(4):
+        plt.subplot(3, 2, i+3)
+        index = np.array([i*5+j for j in range(5)])
+        ASD = df[index, :]
+        for k in range(4):
+            avg = ASD[:, k * 2]
+            std = ASD[:, k * 2 + 1]
+            r1 = list(map(lambda x: x[0] - x[1], zip(avg, std)))  # 上方差
+            r2 = list(map(lambda x: x[0] + x[1], zip(avg, std)))  # 下方差
+            plt.plot(ts, avg, linewidth=3, label=func[k])
+            plt.fill_between(ts, r1, r2, alpha=0.1)
+        # plt.ylim(0.6, 0.85)
+        plt.title(model[i], fontsize=12)
+        plt.xlabel('Contamination Rate', fontsize=12)
+        if i == 0 or i == 2:
+            plt.ylabel('F1-Score', fontsize=12)
+    fig.legend(func, ncol=4, loc='upper center', bbox_to_anchor=(0.55, 0.74))
+
+    plt.tight_layout()
+    plt.savefig('./plotsource/diff_Orate.png', dpi=300)
+    plt.show()
+
+
+def plot_pollute_old():
+    dataset = '/home/xuhz/zry/DeepOD-new/plotsource/polluted_NeuTral.csv'
     df = pd.read_csv(dataset).values[:, 1:]
     ts = [0, 5, 10, 15, 20]
 
@@ -364,6 +466,7 @@ def plot_pollute():
     plt.legend(ncol=2, loc='upper center')  # 图例的位置，bbox_to_anchor=(0.5, 0.92),
 
     plt.tight_layout()
+    plt.savefig('./plotsource/diff_Orate.png', dpi=300)
     plt.show()
 
 
@@ -382,12 +485,31 @@ def test():
     plt.show()
 
 
+def eval_data():
+    path = '/home/xuhz/zry/DeepOD-new/plotsource/eval.csv'
+    df = pd.read_csv(path)
+    before_i = df[df.yseq0 == 0]['seqstarts0'].values
+    before_o = df[df.yseq0 == 1]['seqstarts0'].values
+    before = df['seqstarts0'].values
+    after_i = df[df.yseq10 == 0]['seqstarts10'].values
+    after_o = df[df.yseq10 == 1]['seqstarts10'].values
+    after = df['seqstarts10'].values
+    delete = [i for i in before if i not in after]      # before里面不在after里的数据
+    delete_o = [i for i in delete if i in before_o]     # 被删掉的outlier
+    expand = [i for i in after if i not in before]      # after里不在before的数据
+    expand_i = [i for i in expand if i in after_i]      # 被扩展的inlier
+    print(len(expand_i)/len(expand))
+    print(len(delete_o)/len(delete))
+
+
 if __name__ == '__main__':
+    eval_data()
     # test()
-    # plot_loss_distribution()
+    # plot_loss_distribution()        # 正常、难例和异常无法通过loss区分
+    # plot_loss_distribution_old()
     # plot_dis_distribution()
-    # pollution_rate()    # 随污染率增加f1的变化
-    plot_pollute()          # 不同方法在不同污染率下的性能
+    # pollution_rate()            # 随污染率增加f1的变化   # 记忆效应
+    # plot_pollute()            # 不同方法在不同污染率下的性能
     # plot_hotmap()
     # plot_param_distribution()
     # plot_singledata_param()
